@@ -1,0 +1,23 @@
+[package]
+name = "fabseal-micro"
+version = "0.1.0"
+authors = [ "Tobias Markus <tobias@miglix.eu>" ]
+edition = "2018"
+
+[dependencies]
+actix-web = "4.0.0-beta.6"
+actix-rt = "2.1"
+actix-http = "3.0.0-beta.6"
+tokio = { version = "1.7", features = ["rt"] }
+tokio-postgres = "0.7"
+tokio-amqp = "1.0"
+bb8 = "0.7"
+bb8-postgres = "0.7"
+bb8-lapin = { git = 'https://github.com/adrianbenavides/bb8-lapin.git' }
+bb8-redis = "0.9"
+env_logger = "0.8"
+futures = "0.3"
+lapin = "1.7"
+amq-protocol-types = "6.0"
+log = "0.4"
+serde = "1.0"
