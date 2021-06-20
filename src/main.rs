@@ -1,15 +1,18 @@
+#[macro_use]
+extern crate lazy_static;
+
 use lapin::{Connection, ConnectionProperties, Result as LAResult};
 
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpServer};
 
-use amq_protocol_types::{FieldTable};
-
 use log::{info, debug};
 
 mod site;
-use site::create::create_service;
+use site::create::{create_service, rmq_declare};
+use tokio_amqp::LapinTokioExt;
 
+/*
 async fn create_pg_pool(
     db_url: &str,
 ) -> bb8::Pool<bb8_postgres::PostgresConnectionManager<tokio_postgres::NoTls>> {
@@ -23,6 +26,7 @@ async fn create_pg_pool(
         .await
         .unwrap()
 }
+ */
 
 async fn create_rmq_pool(
     db_url: &str,
@@ -30,50 +34,15 @@ async fn create_rmq_pool(
     // Create RabbitMQ pool
     let manager = bb8_lapin::LapinConnectionManager::new(
         db_url,
-        ConnectionProperties::default()
+        ConnectionProperties::default().with_tokio()
     );
-    let pool = bb8::Pool::builder()
+    bb8::Pool::builder()
         .max_size(15)
         .build(manager)
         .await
-        .unwrap();
-    pool
+        .unwrap()
 }
 
-
-async fn rmq_test(
-    pool: bb8::Pool<bb8_lapin::LapinConnectionManager>
-) -> LAResult<()> {
-    let conn = pool.get().await.unwrap();
-    let channel = conn.create_channel()
-        .await
-        .unwrap();
-
-    info!("CONNECTED");
-
-
-    let qname = "consu";
-    let queue = channel
-        .queue_declare(
-            qname,
-            lapin::options::QueueDeclareOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
-
-    info!("Declared queue {:?}", queue);
-
-    let exch = "fooqueue";
-    let payload = b"test".to_vec();
-    let options =  lapin::options::BasicPublishOptions::default();
-    let confirm = channel.basic_publish(exch, qname, options, payload, lapin::BasicProperties::default())
-        .await?
-        .await?;
-
-    assert_eq!(confirm, lapin::publisher_confirm::Confirmation::NotRequested);
-
-    Ok(())
-}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -92,7 +61,7 @@ async fn main() -> std::io::Result<()> {
     let http_endpoint = std::env::var("HTTP_ADDR")
     .unwrap_or_else(|_| "127.0.0.1:8080".into());
 
-    let rr = rmq_test(rmq_pool.clone()).await.unwrap();
+    let rr = rmq_declare(rmq_pool.clone()).await.unwrap();
     info!("{:?}", rr);
 
     HttpServer::new(move || {
