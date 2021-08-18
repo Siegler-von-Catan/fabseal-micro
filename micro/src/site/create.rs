@@ -1,7 +1,8 @@
 use actix_web::{get, post, web,  HttpResponse, Result as AWResult};
+use actix_session::Session;
 
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-
 
 use lapin::{Result as LAResult, protocol::basic::AMQPProperties};
 use amq_protocol_types::{FieldTable};
@@ -75,11 +76,10 @@ async fn rmq_publish(
     conn: bb8::PooledConnection<'_, bb8_lapin::LapinConnectionManager>,
     data: &BBReq,
 ) -> LAResult<()> {
+    info!("sending {:?}", data);
     let channel = conn.create_channel()
         .await
         .unwrap();
-
-
 
     let payload = serde_json::to_vec(&data).unwrap();
     let confirm = channel.basic_publish(
@@ -147,27 +147,40 @@ async fn fetch_model(
   `200 OK id=<upload_id>`
 */
 
+const REQUEST_ID_COOKIE_KEY: &'static str = "request-id";
+
 #[post("/new")]
-async fn create_new() -> AWResult<HttpResponse> {
-    Ok(HttpResponse::MethodNotAllowed().finish())
+async fn create_new(session: Session) -> AWResult<HttpResponse> {
+    session.renew();
+    let mut rng = rand::thread_rng();
+    let id: u32 = rng.gen();
+    session.insert(REQUEST_ID_COOKIE_KEY, id)?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 
 #[post("/upload")]
 async fn create_upload(
-    info: web::Query<RequestInfo>
+    session: Session,
+    info: web::Query<RequestInfo>,
+    body: web::Payload
 ) -> AWResult<HttpResponse> {
     info!("create_upload query={:?}", info);
+
+    if let Some(id) = session.get::<u32>(REQUEST_ID_COOKIE_KEY)? {
+        println!("request-id: {}", id);
+    }
 
     Ok(HttpResponse::MethodNotAllowed().finish())
 }
 
 #[post("/start")]
 async fn create_start(
+    session: Session,
     pool: web::Data<bb8::Pool<bb8_lapin::LapinConnectionManager>>,
     info: web::Query<RequestInfo>
 ) -> AWResult<HttpResponse> {
-    // info!("create_start query={:?}", info);
+    info!("create_start query={:?}", info);
 
     let conn = pool.get().await.unwrap();
 
@@ -182,6 +195,7 @@ async fn create_start(
 
 #[get("/result")]
 async fn create_result(
+    session: Session,
     info: web::Query<ResultRequestInfo>
 ) -> AWResult<HttpResponse> {
     info!("create_result query={:?}", info);

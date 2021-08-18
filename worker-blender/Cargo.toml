@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 #actix-web = "4.0.0-beta"
 #actix-http = "3.0.0-beta"
-tokio = { version = "1.7", features = ["rt"] }
+tokio = { version = "1.7", features = ["full"] }
 # tokio-postgres = "0.7"
 tokio-amqp = "1.0"
 bb8 = "0.7"
@@ -28,4 +28,4 @@ serde_json = "1.0"
 #lazy_static = "1.4"
 #futures-util = "0.3"
 futures = "0.3"
-
+async-global-executor = "2"

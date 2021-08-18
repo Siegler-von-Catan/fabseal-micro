@@ -1,13 +1,35 @@
 // use futures_util::stream::stream::StreamExt;
-use futures::future::Future;
+use futures::{StreamExt};
 
 use bb8_lapin::prelude::*;
 
+use serde::{Deserialize, Serialize};
+
 use lapin::{
-    options::*, publisher_confirm::Confirmation, types::FieldTable, BasicProperties, Connection,
+    options::*, types::FieldTable, Connection,
     ConnectionProperties, Result,
 };
 use log::info;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct BBReq {
+    request_id: i32,
+    image_id: i32,
+}
+
+const FABSEAL_QUEUE: &'static str = "fabseal";
+
+async fn handle_work_item(delivery: lapin::message::Delivery)
+{
+    let payload: BBReq = serde_json::from_slice(&delivery.data).unwrap();
+    info!("payload={:?}", payload);
+
+    delivery
+        .ack(BasicAckOptions::default())
+        .await
+        .expect("ack");
+
+}
 
 async fn run_conn(
 	conn: &Connection
@@ -17,7 +39,7 @@ async fn run_conn(
 
     let queue = channel_a
         .queue_declare(
-            "hello",
+            FABSEAL_QUEUE,
             QueueDeclareOptions::default(),
             FieldTable::default(),
         )
@@ -27,43 +49,28 @@ async fn run_conn(
 
     let mut consumer = channel_b
         .basic_consume(
-            "hello",
-            "my_consumer",
+            FABSEAL_QUEUE,
+            "worker_blender",
             BasicConsumeOptions::default(),
             FieldTable::default(),
         )
         .await?;
+
+
     tokio::spawn(async move {
         info!("will consume");
         while let Some(delivery) = consumer.next().await {
+            info!("received delivery");
             let (_, delivery) = delivery.expect("error in consumer");
-            delivery
-                .ack(BasicAckOptions::default())
-                .await
-                .expect("ack");
+            handle_work_item(delivery).await;
         }
-    }).detach();
-
-    let payload = b"Hello world!";
-
-    loop {
-        let confirm = channel_a
-            .basic_publish(
-                "",
-                "hello",
-                BasicPublishOptions::default(),
-                payload.to_vec(),
-                BasicProperties::default(),
-            )
-            .await?
-            .await?;
-        assert_eq!(confirm, Confirmation::NotRequested);
-    }
+    }).await.unwrap();
 
     Ok(())
 }
 
 async fn example() {
+    info!("will launch");
     let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
     let manager = LapinConnectionManager::new(&addr, ConnectionProperties::default());
     let pool = bb8::Pool::builder()
@@ -74,24 +81,64 @@ async fn example() {
     for _ in 0..20 {
         let pool = pool.clone();
         tokio::spawn(async move {
+            info!("will pool");
             let conn = pool.get().await.unwrap();
             // use the connection
-            run_conn(&conn).await;
+            run_conn(&conn).await.unwrap();
             // it will be returned to the pool when it falls out of scope.
         });
     }
 }
 
-fn main() -> Result<()> {
+fn example2() {
+    info!("will launch");
+    let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
+
+    async_global_executor::block_on(async {
+        let conn = Connection::connect(
+            &addr,
+            ConnectionProperties::default(),
+        )
+        .await.unwrap();
+        let channel_b = conn.create_channel().await.unwrap();
+
+        info!("CONNECTED");
+        let mut consumer = channel_b
+            .basic_consume(
+                FABSEAL_QUEUE,
+                "worker_blender",
+                BasicConsumeOptions::default(),
+                FieldTable::default(),
+            )
+            .await.unwrap();
+
+
+        async_global_executor::spawn(async move {
+            info!("will consume");
+            while let Some(delivery) = consumer.next().await {
+                info!("received delivery");
+                let (_, delivery) = delivery.expect("error in consumer");
+                handle_work_item(delivery).await;
+            }
+        }).await;
+
+    });
+}
+
+// #[tokio::main]
+fn main() {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
 
     env_logger::init();
 
+    info!("will po1ol");
+    example2();
+    /*
     tokio::spawn(async {
+        info!("will po2ol");
     	example().await
-    });
-
-    Ok(())
+    }).await.unwrap();
+    */
 }

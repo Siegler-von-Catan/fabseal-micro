@@ -1,10 +1,17 @@
 #[macro_use]
 extern crate lazy_static;
 
+use actix_web::cookie::SameSite;
+use actix_web::web::Data;
+use time::Duration;
+
+use rand::Rng;
+
 use lapin::{Connection, ConnectionProperties, Result as LAResult};
 
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpServer};
+use actix_session::CookieSession;
 
 use log::{info, debug};
 
@@ -43,6 +50,7 @@ async fn create_rmq_pool(
         .unwrap()
 }
 
+const COOKIE_DURATION: Duration = Duration::hour();
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -64,11 +72,21 @@ async fn main() -> std::io::Result<()> {
     let rr = rmq_declare(rmq_pool.clone()).await.unwrap();
     info!("{:?}", rr);
 
+    let mut rng = rand::thread_rng();
+    let key: [u8; 32] = rng.gen();
+
     HttpServer::new(move || {
         App::new()
-            .data(rmq_pool.clone())
+            .app_data(Data::new(rmq_pool.clone()))
             .wrap(actix_web::middleware::Compress::default())
             .wrap(Logger::default())
+            .wrap(CookieSession::signed(&key)
+                .domain("fabseal.de")
+                .name("fabseal_session")
+                .secure(true)
+                .expires_in_time(COOKIE_DURATION)
+                .same_site(SameSite::Strict)
+            )
             .service(web::scope("/api/v1").configure(create_service))
     })
     .bind(http_endpoint)?
