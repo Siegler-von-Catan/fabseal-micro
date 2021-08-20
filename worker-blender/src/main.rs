@@ -26,7 +26,7 @@ async fn handle_work_item(
     let payload: ImageRequest = serde_json::from_slice(&delivery.data).unwrap();
     info!("payload={:?}", payload.image.image_type);
 
-    let dmstl_env = std::env::var("DMSTL_DIR").unwrap();
+    let dmstl_env = std::env::var("DMSTL_DIR").expect("Specify displacementMapToStl directory with DMSTL_DIR");
     let dmstl: PathBuf  = PathBuf::from(dmstl_env).canonicalize().unwrap();
 
     let mut input_file = NamedTempFile::new().unwrap();
@@ -69,8 +69,6 @@ async fn handle_work_item(
     debug!("closing temporary files");
     input_file.close().unwrap();
     output_file.close().unwrap();
-    // input_file.keep().unwrap();
-    // output_file.keep().unwrap();
 
     debug!("ack-ing message");
 

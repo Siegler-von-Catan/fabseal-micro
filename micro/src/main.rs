@@ -18,6 +18,8 @@ use actix_storage_redis::{RedisBackend};
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpServer};
 
+use actix_redis::RedisActor;
+
 use log::{debug, info};
 
 mod site;
@@ -84,9 +86,12 @@ async fn main() -> std::io::Result<()> {
 
     let ep = settings.http_endpoint.clone();
     HttpServer::new(move || {
+        let redis = RedisActor::start(settings.redis.address.as_str());
+
         App::new()
             .app_data(storage.clone())
             .app_data(Data::new(rmq_pool.clone()))
+            .data(redis)
             .wrap(actix_web::middleware::Compress::default())
             .wrap(Logger::default())
             .wrap(create_redis_session(settings.clone(), &key))

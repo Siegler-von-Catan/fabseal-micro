@@ -13,6 +13,7 @@ publish = false
 fabseal-micro-common = { path = "../micro-common" }
 
 bytes = "1.0"
+actix = "0.10"
 actix-web = "3"
 actix-http = "2"
 # actix-session = "0.5-beta.2"
@@ -45,4 +46,5 @@ time = "0.2"
 mime = "0.3"
 futures-util = "0.3"
 redis = "0.17"
+redis-async = "0.6"
 config = "0.11"

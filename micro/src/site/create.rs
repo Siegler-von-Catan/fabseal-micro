@@ -1,20 +1,25 @@
 use std::time::Duration;
 
+use actix::Addr;
 use actix_web::{HttpResponse, Result as AWResult, get, post, web::{self}};
 use actix_session::Session;
 use actix_storage::Storage;
 use actix_multipart as mp;
+use actix_redis::{Command, RedisActor};
+use redis_async::{resp::RespValue, resp_array};
 
-use futures_util::{TryStreamExt, stream::{StreamExt}};
+use futures_util::{TryStreamExt};
 
 use rand::Rng;
 
 use log::{debug, info};
 
-use fabseal_micro_common::{ImageRequest, ImageType, StoredImage};
+use fabseal_micro_common::{ImageRequest, StoredImage, result_key};
 
-use crate::site::rmq_ops::rmq_publish;
+use crate::site::{rmq_ops::rmq_publish, util::{read_byte_chunks, request_cookie, validate_mime_type}};
 use crate::site::types::*;
+
+use super::util::REQUEST_ID_COOKIE_KEY;
 
 /*
 
@@ -36,10 +41,10 @@ async fn fetch_model(
 
     match info.result_type {
         ResultType::Heightmap => {
-            Ok(HttpResponse::MethodNotAllowed().finish())
+            Ok(HttpResponse::NotImplemented().finish())
         },
         ResultType::Model => {
-            Ok(HttpResponse::MethodNotAllowed().finish())
+            Ok(HttpResponse::NotImplemented().finish())
         },
     }
 }
@@ -66,7 +71,6 @@ async fn fetch_model(
   `200 OK id=<upload_id>`
 */
 
-const REQUEST_ID_COOKIE_KEY: &str = "request-id";
 
 #[post("/new")]
 async fn create_new(session: Session) -> AWResult<HttpResponse> {
@@ -76,45 +80,6 @@ async fn create_new(session: Session) -> AWResult<HttpResponse> {
     // session.insert(REQUEST_ID_COOKIE_KEY, id)?;
     session.set(REQUEST_ID_COOKIE_KEY, id)?;
     Ok(HttpResponse::Ok().finish())
-}
-
-fn request_cookie(session: Session)
- -> AWResult<u32> {
-    session.get::<u32>(REQUEST_ID_COOKIE_KEY)?
-        .ok_or_else(|| actix_web::error::ErrorForbidden("Session cookie is required for upload"))
- }
-
-async fn read_byte_chunks(
-    field: &mut mp::Field
-) -> Vec<u8> {
-    let mut data: Vec<u8> = Vec::new();
-    while let Some(Ok(chunk)) = field.next().await {
-        data.extend_from_slice(chunk.as_ref());
-    }
-    data
-}
-
-fn validate_mime_type(
-    content_type: &mime::Mime
-) -> Option<ImageType> {
-    if content_type.type_() != mime::IMAGE {
-        return None
-    }
-
-    match content_type.subtype() {
-        mime::JPEG => {
-            debug!("jpeg!");
-            Some(ImageType::JPEG)
-        },
-        mime::PNG => {
-            debug!("png!");
-            Some(ImageType::PNG)
-        },
-        _ => {
-            debug!("unknown subtype: {}", content_type);
-            None
-        },
-    }
 }
 
 #[post("/upload")]
@@ -149,9 +114,8 @@ async fn create_start(
     session: Session,
     storage: Storage,
     pool: web::Data<bb8::Pool<bb8_lapin::LapinConnectionManager>>,
-    info: web::Query<RequestInfo>
 ) -> AWResult<HttpResponse> {
-    info!("create_start query={:?}", info);
+    info!("create_start");
 
     let id = request_cookie(session)?;
     debug!("request-id: {}", id);
@@ -180,19 +144,38 @@ async fn create_start(
 
 #[get("/result")]
 async fn create_result(
-    _session: Session,
+    session: Session,
+    redis: web::Data<Addr<RedisActor>>,
     info: web::Query<ResultRequestInfo>
 ) -> AWResult<HttpResponse> {
     info!("create_result query={:?}", info);
     // Ok(HttpResponse::Processing().finish())
 
     match info.result_type {
-        ResultType::Heightmap => {
-            Ok(HttpResponse::MethodNotAllowed().finish())
-        },
         ResultType::Model => {
-            Ok(HttpResponse::MethodNotAllowed().finish())
+            return Ok(HttpResponse::NotImplemented().finish())
         },
+        _ => {}
+    }
+
+    let id = request_cookie(session)?;
+
+    let comm = Command(resp_array!["GET", result_key(id)]);
+    debug!("redis command: {:?}", comm);
+    let resp = redis.send(comm).await??;
+
+    match resp {
+        RespValue::Nil => {
+            Ok(HttpResponse::NotFound().finish())
+        },
+        RespValue::BulkString(data) => {
+            Ok(HttpResponse::Ok()
+                .content_type("model/stl")
+                .body(data))
+        },
+        _ => {
+            Ok(HttpResponse::InternalServerError().finish())
+        }
     }
 }
 
@@ -202,7 +185,7 @@ async fn create_finish(
 ) -> AWResult<HttpResponse> {
     info!("create_finish query={:?}", info);
 
-    Ok(HttpResponse::MethodNotAllowed().finish())
+    Ok(HttpResponse::NotImplemented().finish())
 }
 
 pub(crate) fn create_service(cfg: &mut web::ServiceConfig) {
