@@ -2,5 +2,6 @@
 
 members = [
     "micro",
+    "micro-common",
     "worker-blender"
 ]

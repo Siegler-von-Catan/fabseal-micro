@@ -3,103 +3,101 @@ use futures::{StreamExt};
 
 use bb8_lapin::prelude::*;
 
-use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 use lapin::{
     options::*, types::FieldTable, Connection,
     ConnectionProperties, Result,
 };
-use log::info;
+use log::{debug, info};
 
-#[derive(Serialize, Deserialize, Debug)]
-struct BBReq {
-    request_id: i32,
-    image_id: i32,
-}
+use fabseal_micro_common::*;
 
-const FABSEAL_QUEUE: &'static str = "fabseal";
+use tempfile::NamedTempFile;
 
-async fn handle_work_item(delivery: lapin::message::Delivery)
+use std::io::{Read, Write};
+
+use std::path::{Path, PathBuf};
+
+use redis::Commands;
+
+async fn handle_work_item(
+    delivery: lapin::message::Delivery,
+    conn: &mut redis::Connection
+)
 {
-    let payload: BBReq = serde_json::from_slice(&delivery.data).unwrap();
-    info!("payload={:?}", payload);
+    let mut payload: ImageRequest = serde_json::from_slice(&delivery.data).unwrap();
+    info!("payload={:?}", payload.image.image_type);
+
+    let dmstl_env = std::env::var("DMSTL_DIR").unwrap();
+    let dmstl: PathBuf  = PathBuf::from(dmstl_env).canonicalize().unwrap();
+
+    let mut input_file = NamedTempFile::new().unwrap();
+    let mut output_file = NamedTempFile::new().unwrap();
+
+    debug!("input temp file: {:?}", input_file);
+    debug!("output temp file: {:?}", output_file);
+
+    input_file.write_all(&mut payload.image.image).unwrap();
+
+    let mut blend_path: PathBuf = dmstl.clone();
+    blend_path.push(r"src/empty.blend");
+    let mut python_path: PathBuf = dmstl.clone();
+    python_path.push(r"src/displacementMapToStl.py");
+
+    let mut comm = Command::new("blender");
+    comm
+            .arg("--threads").arg("4")
+            .arg("--background")
+            .arg(blend_path.as_os_str())
+            .arg("--python")
+            .arg(python_path.as_os_str())
+            .arg("--")
+            .arg(input_file.path())
+            .arg(output_file.path());
+
+    debug!("the command: {:?}", comm);
+
+    let _status = comm
+            .status()
+            .expect("failed to execute process");
+
+    let mut result_data: Vec<u8> = Vec::new();
+    output_file.as_file_mut().read_to_end(&mut result_data).unwrap();
+
+    let key = result_key(payload.request_id);
+    debug!("setting key={}", key);
+    let _ : () = conn.set_ex(key, result_data, RESULT_EXPIRATION_SECONDS).unwrap();
+
+    debug!("closing temporary files");
+    input_file.close().unwrap();
+    output_file.close().unwrap();
+    // input_file.keep().unwrap();
+    // output_file.keep().unwrap();
+
+    debug!("ack-ing message");
 
     delivery
         .ack(BasicAckOptions::default())
         .await
-        .expect("ack");
-
+        .expect("ack failed");
 }
 
-async fn run_conn(
-	conn: &Connection
-) -> Result<()> {
-    let channel_a = conn.create_channel().await?;
-    let channel_b = conn.create_channel().await?;
-
-    let queue = channel_a
-        .queue_declare(
-            FABSEAL_QUEUE,
-            QueueDeclareOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
-
-    info!("Declared queue {:?}", queue);
-
-    let mut consumer = channel_b
-        .basic_consume(
-            FABSEAL_QUEUE,
-            "worker_blender",
-            BasicConsumeOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
-
-
-    tokio::spawn(async move {
-        info!("will consume");
-        while let Some(delivery) = consumer.next().await {
-            info!("received delivery");
-            let (_, delivery) = delivery.expect("error in consumer");
-            handle_work_item(delivery).await;
-        }
-    }).await.unwrap();
-
-    Ok(())
-}
-
-async fn example() {
+fn run() {
     info!("will launch");
-    let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
-    let manager = LapinConnectionManager::new(&addr, ConnectionProperties::default());
-    let pool = bb8::Pool::builder()
-        .max_size(15)
-        .build(manager)
-        .await
-        .unwrap();
-    for _ in 0..20 {
-        let pool = pool.clone();
-        tokio::spawn(async move {
-            info!("will pool");
-            let conn = pool.get().await.unwrap();
-            // use the connection
-            run_conn(&conn).await.unwrap();
-            // it will be returned to the pool when it falls out of scope.
-        });
-    }
-}
-
-fn example2() {
-    info!("will launch");
-    let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
+    let rmq_addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| "amqp://127.0.0.1:5672/%2f".into());
+    let redis_addr = std::env::var("REDIS_ADDR").unwrap_or_else(|_| "redis://127.0.0.1/".into());
 
     async_global_executor::block_on(async {
         let conn = Connection::connect(
-            &addr,
+            &rmq_addr,
             ConnectionProperties::default(),
         )
         .await.unwrap();
+
+        let client = redis::Client::open(redis_addr).unwrap();
+        let mut redis_conn = client.get_connection().unwrap();
+
         let channel_b = conn.create_channel().await.unwrap();
 
         info!("CONNECTED");
@@ -118,7 +116,7 @@ fn example2() {
             while let Some(delivery) = consumer.next().await {
                 info!("received delivery");
                 let (_, delivery) = delivery.expect("error in consumer");
-                handle_work_item(delivery).await;
+                handle_work_item(delivery, &mut redis_conn).await;
             }
         }).await;
 
@@ -127,18 +125,7 @@ fn example2() {
 
 // #[tokio::main]
 fn main() {
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
-    env_logger::init();
-
-    info!("will po1ol");
-    example2();
-    /*
-    tokio::spawn(async {
-        info!("will po2ol");
-    	example().await
-    }).await.unwrap();
-    */
+    run();
 }

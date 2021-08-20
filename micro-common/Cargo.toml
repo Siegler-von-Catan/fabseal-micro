@@ -1,0 +1,15 @@
+[package]
+name = "fabseal-micro-common"
+version = "0.1.0"
+authors = [ "Tobias Markus <tobias@miglix.eu>" ]
+edition = "2018"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Siegler-von-Catan/fabseal-micro/"
+homepage = "https://fabseal.de"
+categories = [ "computer-vision", "web-programming::http-server" ]
+publish = false
+
+[dependencies]
+serde = "1.0"
+serde_json = "1.0"
+mime = "0.3"
