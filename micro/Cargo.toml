@@ -44,5 +44,5 @@ rand = "0.8"
 time = "0.2"
 mime = "0.3"
 futures-util = "0.3"
-
+redis = "0.17"
 config = "0.11"

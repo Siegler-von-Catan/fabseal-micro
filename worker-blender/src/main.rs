@@ -1,13 +1,10 @@
-// use futures_util::stream::stream::StreamExt;
 use futures::{StreamExt};
-
-use bb8_lapin::prelude::*;
 
 use std::process::Command;
 
 use lapin::{
     options::*, types::FieldTable, Connection,
-    ConnectionProperties, Result,
+    ConnectionProperties,
 };
 use log::{debug, info};
 
@@ -17,7 +14,7 @@ use tempfile::NamedTempFile;
 
 use std::io::{Read, Write};
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use redis::Commands;
 
@@ -26,7 +23,7 @@ async fn handle_work_item(
     conn: &mut redis::Connection
 )
 {
-    let mut payload: ImageRequest = serde_json::from_slice(&delivery.data).unwrap();
+    let payload: ImageRequest = serde_json::from_slice(&delivery.data).unwrap();
     info!("payload={:?}", payload.image.image_type);
 
     let dmstl_env = std::env::var("DMSTL_DIR").unwrap();
@@ -38,7 +35,7 @@ async fn handle_work_item(
     debug!("input temp file: {:?}", input_file);
     debug!("output temp file: {:?}", output_file);
 
-    input_file.write_all(&mut payload.image.image).unwrap();
+    input_file.write_all(&payload.image.image).unwrap();
 
     let mut blend_path: PathBuf = dmstl.clone();
     blend_path.push(r"src/empty.blend");

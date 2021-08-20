@@ -29,9 +29,9 @@ pub struct RequestSettings {
     pub is_low_quality: bool,
 }
 
-pub const FABSEAL_QUEUE: &'static str = "fabseal";
+pub const FABSEAL_QUEUE: &str = "fabseal";
 
-pub const FABSEAL_EXCHANGE: &'static str = "";
+pub const FABSEAL_EXCHANGE: &str = "";
 
 pub const RESULT_EXPIRATION_SECONDS: usize = 10*60;
 

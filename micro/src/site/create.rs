@@ -86,7 +86,7 @@ async fn rmq_publish(
     let confirm = channel.basic_publish(
             FABSEAL_EXCHANGE,
             FABSEAL_QUEUE,
-            PUBLISH_OPTIONS.clone(),
+            *PUBLISH_OPTIONS,
             payload,
             PROPS.clone()
         )
@@ -149,7 +149,7 @@ async fn fetch_model(
   `200 OK id=<upload_id>`
 */
 
-const REQUEST_ID_COOKIE_KEY: &'static str = "request-id";
+const REQUEST_ID_COOKIE_KEY: &str = "request-id";
 
 #[post("/new")]
 async fn create_new(session: Session) -> AWResult<HttpResponse> {
@@ -195,7 +195,7 @@ fn validate_mime_type(
         },
         _ => {
             debug!("unknown subtype: {}", content_type);
-            return None
+            None
         },
     }
 }
@@ -263,7 +263,7 @@ async fn create_start(
 
 #[get("/result")]
 async fn create_result(
-    session: Session,
+    _session: Session,
     info: web::Query<ResultRequestInfo>
 ) -> AWResult<HttpResponse> {
     info!("create_result query={:?}", info);
@@ -293,9 +293,6 @@ pub fn create_service(cfg: &mut web::ServiceConfig) {
         web::scope("/userupload")
             .service(fetch_model)
     );
-    let image_mime = mime::IMAGE_JPEG;
-    // Upload Limit: 4 MiB
-    let upload_limit = 4 * 1024 * 1024;
     cfg.service(
         web::scope("/create")
             .service(create_new)
