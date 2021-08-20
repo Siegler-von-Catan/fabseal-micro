@@ -21,27 +21,13 @@ use actix_web::{web, App, HttpServer};
 use log::{debug, info};
 
 mod site;
-use site::create::{create_service, rmq_declare};
+use site::create::create_service;
+use site::rmq_ops::rmq_declare;
 
 mod settings;
 
 use settings::Settings;
 
-/*
-async fn create_pg_pool(
-    db_url: &str,
-) -> bb8::Pool<bb8_postgres::PostgresConnectionManager<tokio_postgres::NoTls>> {
-    let pg_mgr =
-        bb8_postgres::PostgresConnectionManager::new_from_stringlike(db_url, tokio_postgres::NoTls)
-            .unwrap();
-
-    bb8::Pool::builder()
-        .max_size(15)
-        .build(pg_mgr)
-        .await
-        .unwrap()
-}
- */
 
 async fn create_rmq_pool(
     db_url: &str,
