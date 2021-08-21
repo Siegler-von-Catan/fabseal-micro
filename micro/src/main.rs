@@ -4,16 +4,11 @@
 use actix_redis::RedisSession;
 use actix_web::cookie::SameSite;
 use actix_web::web::Data;
-use redis::IntoConnectionInfo;
 use time::Duration;
 
 use rand::Rng;
 
 use lapin::{ConnectionProperties};
-
-// use actix_storage_sled::{actor::ToActorExt, SledConfig};
-use actix_storage::Storage;
-use actix_storage_redis::{RedisBackend};
 
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpServer};
@@ -77,11 +72,6 @@ async fn main() -> std::io::Result<()> {
     let rr = rmq_declare(rmq_pool.clone()).await.unwrap();
     info!("{:?}", rr);
 
-    // let ci = redis::ConnectionInfo { addr: Box::new(settings.redis.address), db: 0, passwd: settings.redis.password };
-    let ci = format!("redis://{}", settings.redis.address.as_str()).into_connection_info().unwrap();
-    let store = RedisBackend::connect(ci).await.unwrap();
-    let storage = Storage::build().expiry_store(store).finish();
-
     let key: [u8; 32] = rand::thread_rng().gen();
 
     let ep = settings.http_endpoint.clone();
@@ -89,7 +79,6 @@ async fn main() -> std::io::Result<()> {
         let redis = RedisActor::start(settings.redis.address.as_str());
 
         App::new()
-            .app_data(storage.clone())
             .app_data(Data::new(rmq_pool.clone()))
             .data(redis)
             .wrap(actix_web::middleware::Compress::default())

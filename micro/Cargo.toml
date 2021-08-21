@@ -13,27 +13,14 @@ publish = false
 fabseal-micro-common = { path = "../micro-common" }
 
 bytes = "1.0"
-actix = "0.10"
-actix-web = "3"
-actix-http = "2"
-# actix-session = "0.5-beta.2"
+actix = { version = "0.10", default-features = false }
+actix-web = { version = "3", default-features = false, features = ["secure-cookies"] }
+actix-http = { version = "2", default-features = false, features = [] }
 actix-multipart = "0.3"
-# actix-session = { git = 'https://github.com/actix/actix-extras.git' }
 actix-session =  "0.4"
 actix-redis = "0.9"
-actix-storage = "0.2"
-actix-storage-redis = "0.2"
-# actix-storage-sled = { version = "0.2", features = ["actor"] }
-
-# tokio = { version = "1.7", features = ["rt"] }
-# tokio-postgres = "0.7"
-# tokio-amqp = "1.0"
-tokio = "0.2"
 bb8 = "0.4.2"
-# bb8-postgres = "0.7"
-# bb8-lapin = { git = 'https://github.com/adrianbenavides/bb8-lapin.git' }
-bb8-lapin = "0.1"
-# bb8-redis = "0.9"
+bb8-lapin = { version = "0.1" }
 env_logger = "0.8"
 lapin = "1.7"
 amq-protocol-types = "6.0"
@@ -45,6 +32,5 @@ rand = "0.8"
 time = "0.2"
 mime = "0.3"
 futures-util = "0.3"
-redis = "0.17"
 redis-async = "0.6"
-config = "0.11"
+config = { version = "0.11", default-features = false, features = [ "toml" ] }

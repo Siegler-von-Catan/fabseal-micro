@@ -4,6 +4,8 @@ use actix_multipart as mp;
 
 use futures_util::{stream::{StreamExt}};
 
+use redis_async::resp::RespValue;
+
 use log::debug;
 
 use fabseal_micro_common::ImageType;
@@ -47,4 +49,20 @@ pub(crate) fn validate_mime_type(
            None
        },
    }
+}
+
+pub(crate) fn convert_bytes_response(
+    resp: RespValue
+) -> AWResult<Vec<u8>> {
+    match resp {
+        RespValue::Nil => {
+            Err(actix_web::error::ErrorNotFound("Not found"))
+        },
+        RespValue::BulkString(data) => {
+            Ok(data)
+        },
+        _ => {
+            Err(actix_web::error::ErrorInternalServerError("Not found"))
+        }
+    }
 }

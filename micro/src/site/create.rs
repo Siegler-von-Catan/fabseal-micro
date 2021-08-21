@@ -1,25 +1,21 @@
-use std::time::Duration;
-
 use actix::Addr;
-use actix_web::{HttpResponse, Result as AWResult, get, post, web::{self}};
+use actix_web::{HttpResponse, Result as AWResult, get, post, web};
 use actix_session::Session;
-use actix_storage::Storage;
 use actix_multipart as mp;
 use actix_redis::{Command, RedisActor};
-use redis_async::{resp::RespValue, resp_array};
+use redis_async::resp_array;
 
-use futures_util::{TryStreamExt};
+use futures_util::TryStreamExt;
 
 use rand::Rng;
 
 use log::{debug, info};
 
-use fabseal_micro_common::{ImageRequest, StoredImage, result_key};
+use fabseal_micro_common::{ImageRequest, StoredImage, input_key, result_key};
 
-use crate::site::{rmq_ops::rmq_publish, util::{read_byte_chunks, request_cookie, validate_mime_type}};
+use crate::site::rmq_ops::rmq_publish;
 use crate::site::types::*;
-
-use super::util::REQUEST_ID_COOKIE_KEY;
+use crate::site::util::*;
 
 /*
 
@@ -85,7 +81,7 @@ async fn create_new(session: Session) -> AWResult<HttpResponse> {
 #[post("/upload")]
 async fn create_upload(
     session: Session,
-    storage: Storage,
+    redis: web::Data<Addr<RedisActor>>,
     mut payload: mp::Multipart
 ) -> AWResult<HttpResponse> {
     info!("create_upload");
@@ -99,11 +95,9 @@ async fn create_upload(
 
         let data = read_byte_chunks(&mut field).await;
 
-        const UPLOAD_EXPIRY: Duration = Duration::from_secs(3600);
-
         let si = StoredImage { image_type: content_type, image: data };
         let si_vec = serde_json::to_vec(&si)?;
-        storage.set_expiring_bytes(id.to_le_bytes(), si_vec, UPLOAD_EXPIRY).await?;
+        let _resp = redis.send(Command(resp_array!["SET", input_key(id), si_vec])).await??;
     }
 
     Ok(HttpResponse::Ok().finish())
@@ -112,7 +106,8 @@ async fn create_upload(
 #[post("/start")]
 async fn create_start(
     session: Session,
-    storage: Storage,
+    redis: web::Data<Addr<RedisActor>>,
+    // storage: Storage,
     pool: web::Data<bb8::Pool<bb8_lapin::LapinConnectionManager>>,
 ) -> AWResult<HttpResponse> {
     info!("create_start");
@@ -120,12 +115,8 @@ async fn create_start(
     let id = request_cookie(session)?;
     debug!("request-id: {}", id);
 
-    let data = storage
-        .get_bytes_ref(id.to_le_bytes())
-        .await?
-        .ok_or_else(|| actix_web::error::ErrorInternalServerError(
-            "Error retrieving internal image data"
-        ))?;
+    let resp = redis.send(Command(resp_array!["GET", input_key(id)])).await??;
+    let data = convert_bytes_response(resp)?;
 
     let conn = pool.get().await.unwrap();
 
@@ -152,10 +143,10 @@ async fn create_result(
     // Ok(HttpResponse::Processing().finish())
 
     match info.result_type {
-        ResultType::Model => {
+        ResultType::Heightmap => {
             return Ok(HttpResponse::NotImplemented().finish())
         },
-        _ => {}
+        ResultType::Model => {}
     }
 
     let id = request_cookie(session)?;
@@ -164,26 +155,15 @@ async fn create_result(
     debug!("redis command: {:?}", comm);
     let resp = redis.send(comm).await??;
 
-    match resp {
-        RespValue::Nil => {
-            Ok(HttpResponse::NotFound().finish())
-        },
-        RespValue::BulkString(data) => {
-            Ok(HttpResponse::Ok()
-                .content_type("model/stl")
-                .body(data))
-        },
-        _ => {
-            Ok(HttpResponse::InternalServerError().finish())
-        }
-    }
+    let response_data = convert_bytes_response(resp)?;
+    Ok(HttpResponse::Ok()
+        .content_type("model/stl")
+        .body(response_data))
 }
 
 #[post("/finish")]
-async fn create_finish(
-    info: web::Query<RequestInfo>
-) -> AWResult<HttpResponse> {
-    info!("create_finish query={:?}", info);
+async fn create_finish() -> AWResult<HttpResponse> {
+    info!("create_finish");
 
     Ok(HttpResponse::NotImplemented().finish())
 }
