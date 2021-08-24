@@ -8,14 +8,15 @@ use redis_async::resp::RespValue;
 
 use log::debug;
 
-use fabseal_micro_common::ImageType;
+use fabseal_micro_common::{ImageType, RequestId};
 
 pub(crate) const REQUEST_ID_COOKIE_KEY: &str = "request-id";
 
 pub(crate) fn request_cookie(session: Session)
--> AWResult<u32> {
-   session.get::<u32>(REQUEST_ID_COOKIE_KEY)?
-       .ok_or_else(|| actix_web::error::ErrorForbidden("Session cookie is required for upload"))
+-> AWResult<RequestId> {
+    let raw_id = session.get::<u32>(REQUEST_ID_COOKIE_KEY)?
+        .ok_or_else(|| actix_web::error::ErrorForbidden("Session cookie is required for upload"))?;
+    Ok(RequestId::create(raw_id))
 }
 
 pub(crate) async fn read_byte_chunks(

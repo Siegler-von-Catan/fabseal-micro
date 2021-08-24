@@ -18,6 +18,7 @@ pub struct RedisSettings {
 pub struct Settings {
     pub debug: bool,
     pub http_endpoint: String,
+    pub domain: Option<String>,
     pub amqp: AmqpSettings,
     pub redis: RedisSettings,
 }
