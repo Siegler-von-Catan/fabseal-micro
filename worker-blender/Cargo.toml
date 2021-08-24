@@ -24,3 +24,4 @@ async-global-executor = "2"
 redis = "0.21"
 tempfile = "3"
 config = { version = "0.11", default-features = false, features = [ "toml" ] }
+anyhow = "1.0"
