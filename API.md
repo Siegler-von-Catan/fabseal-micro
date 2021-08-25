@@ -41,19 +41,24 @@ OR
 ### New
 
 * Endpoint `POST /api/v1/create/new`
-  `200 OK id=<request_id>`
+  `200 OK`
+  (sets cookie)
 
-* Endpoint `POST /api/v1/create/upload?id=<request_id>`
-  Content-Type: `image/jpeg`
+* Endpoint `POST /api/v1/create/upload`
+  Content-Type: `image/jpeg` or `image/png`
 
-* Endpoint `POST /api/v1/create/start?id=<request_id>`
+* Endpoint `POST /api/v1/create/start`
   Content-Type: `application/json` (constaining request settings)
 
-* Endpoint `GET /api/v1/create/result?id=<request_id>&type=heightmap`
-  Content-Type: `image/jpeg`?
+* Endpoint `GET /api/v1/create/result?type=heightmap`
+  Content-Type: `image/jpeg`? (not implemented)
 
-* Endpoint `GET /api/v1/create/result?id=<request_id>&type=model`
-  Content-Type: `model/stl` (or glTF, OBJ?)
+* Endpoint `GET /api/v1/create/result?type=model`
+  Content-Type: `model/stl`
 
-* Endpoint `POST /api/v1/create/finish?id=<request_id>`
-  `200 OK id=<upload_id>`
+* Endpoint `POST /api/v1/create/finish`
+  `200 OK id=<upload_id>` (not implemented)
+
+
+# Internal API
+
