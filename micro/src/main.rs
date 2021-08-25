@@ -4,8 +4,7 @@ use actix_web::{cookie::SameSite, web::Data};
 use fabseal_micro_common::SESSION_TTL_SECONDS;
 use rand::Rng;
 
-use actix_web::middleware::Logger;
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 
 use actix_redis::RedisActor;
 
@@ -21,10 +20,7 @@ use time::Duration;
 
 const COOKIE_DURATION: Duration = Duration::hour();
 
-fn create_redis_session(
-    settings: Settings,
-    key: &[u8]
-) -> RedisSession {
+fn create_redis_session(settings: Settings, key: &[u8]) -> RedisSession {
     let s = RedisSession::new(settings.redis.address.clone(), key)
         .ttl(SESSION_TTL_SECONDS)
         .cookie_name("fabseal_session")
@@ -37,15 +33,8 @@ fn create_redis_session(
         s.cookie_secure(false)
     } else {
         match settings.domain {
-            Some(d) => {
-                s
-                    .cookie_secure(true)
-                    .cookie_domain(&d)
-            },
-            _ => {
-                s
-                    .cookie_secure(true)
-            },
+            Some(d) => s.cookie_secure(true).cookie_domain(&d),
+            _ => s.cookie_secure(true),
         }
     }
 }

@@ -1,8 +1,8 @@
 use actix::Addr;
-use actix_web::{HttpResponse, Result as AWResult, get, post, web};
-use actix_session::Session;
 use actix_multipart as mp;
 use actix_redis::{Command, RedisActor, RespValue};
+use actix_session::Session;
+use actix_web::{get, post, web, HttpResponse, Result as AWResult};
 
 use futures_util::TryStreamExt;
 
@@ -13,22 +13,15 @@ use log::{debug, error, info};
 use fabseal_micro_common::*;
 use redis_async::resp_array;
 
-use crate::site::types::*;
-use crate::site::util::*;
+use crate::site::{types::*, util::*};
 
 #[get("/public/result")]
-async fn fetch_model(
-    info: web::Query<ResultRequestInfo>
-) -> AWResult<HttpResponse> {
+async fn fetch_model(info: web::Query<ResultRequestInfo>) -> AWResult<HttpResponse> {
     info!("fetch_model query={:?}", info);
 
     match info.result_type {
-        ResultType::Heightmap => {
-            Ok(HttpResponse::NotImplemented().finish())
-        },
-        ResultType::Model => {
-            Ok(HttpResponse::NotImplemented().finish())
-        },
+        ResultType::Heightmap => Ok(HttpResponse::NotImplemented().finish()),
+        ResultType::Model => Ok(HttpResponse::NotImplemented().finish()),
     }
 }
 
@@ -46,7 +39,7 @@ async fn create_new(session: Session) -> AWResult<HttpResponse> {
 async fn create_upload(
     session: Session,
     redis: web::Data<Addr<RedisActor>>,
-    mut payload: mp::Multipart
+    mut payload: mp::Multipart,
 ) -> AWResult<HttpResponse> {
     info!("create_upload");
 
@@ -57,14 +50,13 @@ async fn create_upload(
         let _content_type = validate_mime_type(field.content_type())?;
 
         let data = read_byte_chunks(&mut field).await?;
-        let resp = redis.send(
-            Command(resp_array![
+        let resp = redis
+            .send(Command(resp_array![
                 "SETEX",
                 image_key(id),
                 IMAGE_EXPIRATION_SECONDS.to_string(),
                 data
-                ]
-            ))
+            ]))
             .await
             .map_err(redis_error("SETEX"))?
             .map_err(redis_error("SETEX"))?;
@@ -85,14 +77,16 @@ async fn create_start(
     let id = request_cookie(&session)?;
     debug!("request-id: {}", id);
 
-    let resp1 = redis.send(Command(resp_array![
-        "XADD",
-        FABSEAL_SUBMISSION_QUEUE,
-        "MAXLEN",
-        "~",
-        FABSEAL_SUBMISSION_QUEUE_LIMIT.to_string(),
-        "*",
-        "request_id", &id.as_bytes()[..]
+    let resp1 = redis
+        .send(Command(resp_array![
+            "XADD",
+            FABSEAL_SUBMISSION_QUEUE,
+            "MAXLEN",
+            "~",
+            FABSEAL_SUBMISSION_QUEUE_LIMIT.to_string(),
+            "*",
+            "request_id",
+            &id.as_bytes()[..]
         ]))
         .await
         .map_err(redis_error("XADD"))?
@@ -101,31 +95,26 @@ async fn create_start(
         RespValue::Error(e) => {
             error!("Redis error: {}", e);
             Ok(HttpResponse::InternalServerError().finish())
-        },
-        RespValue::BulkString(_) => {
-            Ok(HttpResponse::Accepted().finish())
-        },
+        }
+        RespValue::BulkString(_) => Ok(HttpResponse::Accepted().finish()),
         _ => {
             error!("Unexpected Redis response: {:?}", resp1);
             Ok(HttpResponse::InternalServerError().finish())
-        },
+        }
     }
 }
-
 
 #[get("/result")]
 async fn create_result(
     session: Session,
     redis: web::Data<Addr<RedisActor>>,
-    info: web::Query<ResultRequestInfo>
+    info: web::Query<ResultRequestInfo>,
 ) -> AWResult<HttpResponse> {
     info!("create_result query={:?}", info);
     // Ok(HttpResponse::Processing().finish())
 
     match info.result_type {
-        ResultType::Heightmap => {
-            return Ok(HttpResponse::NotImplemented().finish())
-        },
+        ResultType::Heightmap => return Ok(HttpResponse::NotImplemented().finish()),
         ResultType::Model => {}
     }
 
@@ -133,7 +122,8 @@ async fn create_result(
 
     let comm = Command(resp_array!["GET", result_key(id)]);
     debug!("redis command: {:?}", comm);
-    let resp = redis.send(comm)
+    let resp = redis
+        .send(comm)
         .await
         .map_err(redis_error("GET"))?
         .map_err(redis_error("GET"))?;
@@ -152,16 +142,13 @@ async fn create_finish() -> AWResult<HttpResponse> {
 }
 
 pub(crate) fn create_service(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/userupload")
-            .service(fetch_model)
-    );
+    cfg.service(web::scope("/userupload").service(fetch_model));
     cfg.service(
         web::scope("/create")
             .service(create_new)
             .service(create_upload)
             .service(create_start)
             .service(create_result)
-            .service(create_finish)
+            .service(create_finish),
     );
 }

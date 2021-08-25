@@ -1,9 +1,9 @@
 use tempfile::NamedTempFile;
 
-use std::{io::{Write}, path::Path};
+use std::{io::Write, path::Path};
 
-use log::{debug, trace};
 use anyhow::Result;
+use log::{debug, trace};
 
 pub(crate) struct CommandFileContext {
     input_file: NamedTempFile,
@@ -11,10 +11,7 @@ pub(crate) struct CommandFileContext {
 }
 
 impl CommandFileContext {
-    pub(crate) fn create(
-        input_data: &[u8]
-    ) -> Result<CommandFileContext> {
-
+    pub(crate) fn create(input_data: &[u8]) -> Result<CommandFileContext> {
         let mut input_file = NamedTempFile::new()?;
         let output_file = NamedTempFile::new()?;
 

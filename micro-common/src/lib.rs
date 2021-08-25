@@ -1,5 +1,8 @@
-use std::{array::TryFromSliceError, convert::{TryFrom, TryInto}};
-use std::fmt;
+use std::{
+    array::TryFromSliceError,
+    convert::{TryFrom, TryInto},
+    fmt,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -42,7 +45,7 @@ impl fmt::Display for RequestId {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ImageType {
     PNG,
-    JPEG
+    JPEG,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -67,9 +70,9 @@ pub struct RequestSettings {
     pub is_low_quality: bool,
 }
 
-pub const RESULT_EXPIRATION_SECONDS: usize = 10*60;
-pub const IMAGE_EXPIRATION_SECONDS: usize = 10*60;
-pub const SESSION_TTL_SECONDS: u32 = 30*60;
+pub const RESULT_EXPIRATION_SECONDS: usize = 10 * 60;
+pub const IMAGE_EXPIRATION_SECONDS: usize = 10 * 60;
+pub const SESSION_TTL_SECONDS: u32 = 30 * 60;
 
 pub const FABSEAL_SUBMISSION_QUEUE_LIMIT: usize = 50;
 
@@ -78,23 +81,26 @@ pub const FABSEAL_SUBMISSION_CONSUMER_GROUP: &str = "fs_submission_group";
 
 const REDIS_NAMESPACE: &str = "fsdata_v1";
 
-pub fn result_key(
-    request_id: RequestId
-) -> String {
+pub fn result_key(request_id: RequestId) -> String {
     const REDIS_NAMESPACE_RESULT: &str = "result";
-    format!("{}:{}:{}", REDIS_NAMESPACE, REDIS_NAMESPACE_RESULT, request_id)
+    format!(
+        "{}:{}:{}",
+        REDIS_NAMESPACE, REDIS_NAMESPACE_RESULT, request_id
+    )
 }
 
-pub fn input_key(
-    request_id: RequestId
-) -> String {
+pub fn input_key(request_id: RequestId) -> String {
     const REDIS_NAMESPACE_INPUT: &str = "input";
-    format!("{}:{}:{}", REDIS_NAMESPACE, REDIS_NAMESPACE_INPUT, request_id)
+    format!(
+        "{}:{}:{}",
+        REDIS_NAMESPACE, REDIS_NAMESPACE_INPUT, request_id
+    )
 }
 
-pub fn image_key(
-    request_id: RequestId
-) -> String {
+pub fn image_key(request_id: RequestId) -> String {
     const REDIS_NAMESPACE_IMAGE: &str = "image";
-    format!("{}:{}:{}", REDIS_NAMESPACE, REDIS_NAMESPACE_IMAGE, request_id)
+    format!(
+        "{}:{}:{}",
+        REDIS_NAMESPACE, REDIS_NAMESPACE_IMAGE, request_id
+    )
 }

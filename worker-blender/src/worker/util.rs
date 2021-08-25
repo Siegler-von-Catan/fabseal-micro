@@ -6,7 +6,7 @@ pub(crate) struct Context {
 }
 impl Context {
     pub(crate) fn from_dmstl_dir(dmstl_path: &str) -> Context {
-        let dmstl: PathBuf  = PathBuf::from(dmstl_path).canonicalize().unwrap();
+        let dmstl: PathBuf = PathBuf::from(dmstl_path).canonicalize().unwrap();
 
         let blend_path: PathBuf = {
             let mut p = dmstl.clone();
@@ -21,7 +21,7 @@ impl Context {
 
         Context {
             blend_path,
-            python_path
+            python_path,
         }
     }
 }
