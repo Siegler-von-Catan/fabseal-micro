@@ -3,7 +3,6 @@ use actix_web::{HttpResponse, Result as AWResult, get, post, web};
 use actix_session::Session;
 use actix_multipart as mp;
 use actix_redis::{Command, RedisActor, RespValue};
-// use redis_async::resp_array;
 
 use futures_util::TryStreamExt;
 
@@ -11,7 +10,7 @@ use rand::Rng;
 
 use log::{debug, error, info};
 
-use fabseal_micro_common::{FABSEAL_SUBMISSION_QUEUE, FABSEAL_SUBMISSION_QUEUE_LIMIT, IMAGE_EXPIRATION_SECONDS, image_key, result_key};
+use fabseal_micro_common::*;
 use redis_async::resp_array;
 
 use crate::site::types::*;
@@ -51,15 +50,26 @@ async fn create_upload(
 ) -> AWResult<HttpResponse> {
     info!("create_upload");
 
-    let id = request_cookie(session)?;
+    let id = request_cookie(&session)?;
     debug!("request-id: {}", id);
 
     while let Ok(Some(mut field)) = payload.try_next().await {
-        let _content_type = validate_mime_type(field.content_type())
-            .ok_or_else(|| actix_web::error::ErrorUnsupportedMediaType("Unknown image type"))?;
+        let _content_type = validate_mime_type(field.content_type())?;
 
-        let data = read_byte_chunks(&mut field).await;
-        let _resp = redis.send(Command(resp_array!["SETEX", image_key(id), IMAGE_EXPIRATION_SECONDS.to_string(), data])).await;
+        let data = read_byte_chunks(&mut field).await?;
+        let resp = redis.send(
+            Command(resp_array![
+                "SETEX",
+                image_key(id),
+                IMAGE_EXPIRATION_SECONDS.to_string(),
+                data
+                ]
+            ))
+            .await
+            .map_err(redis_error("SETEX"))?
+            .map_err(redis_error("SETEX"))?;
+
+        debug_assert_eq!(resp, RespValue::SimpleString("OK".to_string()));
     }
 
     Ok(HttpResponse::Ok().finish())
@@ -69,12 +79,10 @@ async fn create_upload(
 async fn create_start(
     session: Session,
     redis: web::Data<Addr<RedisActor>>,
-    // storage: Storage,
-    // pool: web::Data<bb8::Pool<bb8_lapin::LapinConnectionManager>>,
 ) -> AWResult<HttpResponse> {
     info!("create_start");
 
-    let id = request_cookie(session)?;
+    let id = request_cookie(&session)?;
     debug!("request-id: {}", id);
 
     let resp1 = redis.send(Command(resp_array![
@@ -87,12 +95,8 @@ async fn create_start(
         "request_id", &id.as_bytes()[..]
         ]))
         .await
-        .map_err(|e|
-            actix_web::error::ErrorInternalServerError( format!("{}", e) )
-        )?
-        .map_err(|e|
-            actix_web::error::ErrorInternalServerError( format!("{}", e) )
-        )?;
+        .map_err(redis_error("XADD"))?
+        .map_err(redis_error("XADD"))?;
     match resp1 {
         RespValue::Error(e) => {
             error!("Redis error: {}", e);
@@ -125,18 +129,14 @@ async fn create_result(
         ResultType::Model => {}
     }
 
-    let id = request_cookie(session)?;
+    let id = request_cookie(&session)?;
 
     let comm = Command(resp_array!["GET", result_key(id)]);
     debug!("redis command: {:?}", comm);
-    // let resp = redis.send(comm).await??;
-    let resp = redis.send(comm).await
-        .map_err(|e|
-            actix_web::error::ErrorInternalServerError( format!("{}", e) )
-        )?
-        .map_err(|e|
-            actix_web::error::ErrorInternalServerError( format!("{}", e) )
-        )?;
+    let resp = redis.send(comm)
+        .await
+        .map_err(redis_error("GET"))?
+        .map_err(redis_error("GET"))?;
 
     let response_data = convert_bytes_response(resp)?;
     Ok(HttpResponse::Ok()
