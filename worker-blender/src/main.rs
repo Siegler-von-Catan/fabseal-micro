@@ -11,6 +11,6 @@ fn main() {
     let settings = Settings::new().unwrap();
     debug!("settings: {:?}", settings);
 
-    let mut worker = Worker::create().expect("worker creation");
+    let mut worker = Worker::create(settings).expect("worker creation");
     worker.run();
 }

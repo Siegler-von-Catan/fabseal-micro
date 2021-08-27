@@ -3,12 +3,13 @@ use std::{
     process::{Command, Stdio},
 };
 
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 
 use fabseal_micro_common::*;
 
+use rand::Rng;
 use redis::{
-    streams::{StreamId, StreamReadOptions, StreamReadReply},
+    streams::{StreamId, StreamInfoGroupsReply, StreamReadOptions, StreamReadReply},
     Commands, Value,
 };
 
@@ -24,38 +25,63 @@ use crate::worker::file_context::CommandFileContext;
 mod util;
 use crate::worker::util::Context;
 
+use crate::Settings;
+
 pub(crate) struct Worker {
     conn: redis::Connection,
     ctx: Context,
     should_exit: Arc<AtomicBool>,
+    consumer_name: String,
+    read_options: StreamReadOptions,
 }
 
 impl Drop for Worker {
     fn drop(&mut self) {
-        let res1: Result<Value, redis::RedisError> = self
-            .conn
-            .xgroup_destroy(FABSEAL_SUBMISSION_QUEUE, FABSEAL_SUBMISSION_CONSUMER_GROUP);
+        let res1: Result<Value, redis::RedisError> = self.conn.xgroup_delconsumer(
+            FABSEAL_SUBMISSION_QUEUE,
+            FABSEAL_SUBMISSION_CONSUMER_GROUP,
+            &self.consumer_name,
+        );
         match res1 {
-            Ok(_) => {}
+            Ok(redis::Value::Int(_pending_messages)) => {}
+            Ok(resp) => {
+                warn!(
+                    "Unexpected Redis response while deleting consumer: {:?}",
+                    resp
+                );
+            }
             Err(e) => {
                 error!("Error while dropping Worker: {}", e);
             }
         }
+
+        // Don't call XGROUP DESTROY, since other workers might be active
     }
 }
 
 impl Worker {
-    pub(crate) fn create() -> Result<Worker> {
-        let dmstl_env = std::env::var("DMSTL_DIR")
-            .expect("Specify displacementMapToStl directory with DMSTL_DIR");
-        let ctx = Context::from_dmstl_dir(dmstl_env.as_str());
+    pub(crate) fn create(settings: Settings) -> Result<Worker> {
+        let ctx = Context::from_dmstl_dir(settings.dmstl_directory.as_str());
 
-        info!("will launch");
-        let redis_addr =
-            std::env::var("REDIS_ADDR").unwrap_or_else(|_| "redis://127.0.0.1/".into());
+        let redis_addr = format!("redis://{}/", settings.redis.address);
 
-        let client = redis::Client::open(redis_addr)?;
-        let mut redis_conn = client.get_connection()?;
+        Self::create_from(ctx, &redis_addr)
+    }
+
+    fn setup_stream(redis_conn: &mut redis::Connection) -> redis::RedisResult<()> {
+        let group_exists: bool = redis_conn
+            .xinfo_groups::<_, StreamInfoGroupsReply>(FABSEAL_SUBMISSION_QUEUE)?
+            .groups
+            .iter()
+            .any(|g| g.name == FABSEAL_SUBMISSION_CONSUMER_GROUP);
+
+        if group_exists {
+            return Ok(());
+        }
+
+        // NOTE: Possible race condition here (someone could have created the consumer group in the meantime)
+        // But that's not a big issue, since we ignore consumer group creation errors anyway
+        // (The redis crate does not allow differentiating between BUSYGROUP and other errors)
 
         let res1 = redis_conn.xgroup_create_mkstream(
             FABSEAL_SUBMISSION_QUEUE,
@@ -63,48 +89,94 @@ impl Worker {
             "$",
         );
         match res1 {
-            Ok(redis::Value::Okay) => {}
-            Ok(_) => {}
+            Ok(redis::Value::Okay) => {
+                // Everything fine
+                Ok(())
+            }
+            Ok(resp) => {
+                // Possibly BUSYGROUP (or another error)
+                warn!(
+                    "Unexpected Redis response (possibly BUSYGROUP?), ignoring: {:?}",
+                    resp
+                );
+                Ok(())
+            }
             Err(rerr) => {
                 error!("redis error: {:?}", rerr);
+                Err(rerr)
             }
         }
-        // assert!(res1 == redis::Value::Okay);
+    }
 
+    fn consumer_name() -> String {
+        let id: u32 = rand::thread_rng().gen();
+
+        format!("fs_consumer_{:08X}", id)
+    }
+
+    fn setup_exit_flag() -> Result<Arc<AtomicBool>> {
         let should_exit = Arc::new(AtomicBool::new(false));
         signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&should_exit))?;
         signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&should_exit))?;
+        Ok(should_exit)
+    }
+
+    fn create_from(ctx: Context, redis_addr: &str) -> Result<Worker> {
+        let client = redis::Client::open(redis_addr)?;
+        let conn = {
+            let mut conn = client.get_connection()?;
+            Self::setup_stream(&mut conn)?;
+            conn
+        };
+
+        let should_exit = Self::setup_exit_flag()?;
+
+        let consumer_name = Self::consumer_name();
+
+        const READ_TIMEOUT: usize = 1000;
+        let read_options = StreamReadOptions::default()
+            .count(1)
+            .block(READ_TIMEOUT)
+            .group(FABSEAL_SUBMISSION_CONSUMER_GROUP, &consumer_name);
 
         Ok(Worker {
-            conn: redis_conn,
+            conn,
             ctx,
             should_exit,
+            read_options,
+            consumer_name,
         })
+    }
+
+    fn read_stream(&mut self) -> Result<StreamReadReply> {
+        let results: StreamReadReply =
+            self.conn
+                .xread_options(&[FABSEAL_SUBMISSION_QUEUE], &[">"], &self.read_options)?;
+        Ok(results)
     }
 
     pub(crate) fn run(&mut self) {
         while !self.should_exit.load(Ordering::Relaxed) {
-            const READ_TIMEOUT: usize = 1000;
-            let opts = StreamReadOptions::default()
-                .count(1)
-                .block(READ_TIMEOUT)
-                .group(FABSEAL_SUBMISSION_CONSUMER_GROUP, "fixme_consumer_1");
-            let results: StreamReadReply = self
-                .conn
-                .xread_options(&[FABSEAL_SUBMISSION_QUEUE], &[">"], opts)
-                .unwrap();
-            for sk in results.keys {
-                debug_assert!(sk.key == FABSEAL_SUBMISSION_QUEUE);
-                for msg in sk.ids {
-                    self.handle_stream_msg(msg);
+            match self.read_stream() {
+                Ok(results) => {
+                    for sk in results.keys {
+                        debug_assert!(sk.key == FABSEAL_SUBMISSION_QUEUE);
+                        for msg in sk.ids {
+                            self.handle_stream_msg(msg);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("redis error, ignoring message: {:?}", e);
                 }
             }
         }
+
         info!("received signal, shutting down");
     }
 
     fn handle_stream_msg(&mut self, msg: StreamId) {
-        debug!("msg={:?}", msg);
+        trace!("msg={:?}", msg);
 
         let request_id: RequestId = match msg.map.get("request_id").unwrap() {
             Value::Data(v) => {
@@ -162,17 +234,12 @@ impl Worker {
 
         comm.stdin(Stdio::null())
             .stdout(Stdio::piped())
-            // .arg("--threads").arg("1")
             .arg("--background")
             .arg(self.ctx.blend_path.as_os_str())
-            // .arg("src/empty.blend")
             .arg("--python")
-            // .arg("src/displacementMapToStl.py")
             .arg(self.ctx.python_path.as_os_str())
             .arg("--log-level")
             .arg("0")
-            // .arg("--debug")
-            // .arg("--verbose").arg("0")
             .arg("--")
             .arg(fctx.input_file_path())
             .arg(fctx.output_file_path());
