@@ -11,3 +11,4 @@ publish = false
 
 [dependencies]
 serde = "1.0"
+rand = "0.8"

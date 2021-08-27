@@ -6,9 +6,7 @@ use actix_web::{get, post, web, HttpResponse, Result as AWResult};
 
 use futures_util::TryStreamExt;
 
-use rand::Rng;
-
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
 
 use fabseal_micro_common::*;
 use redis_async::resp_array;
@@ -28,8 +26,7 @@ async fn fetch_model(info: web::Query<ResultRequestInfo>) -> AWResult<HttpRespon
 #[post("/new")]
 async fn create_new(session: Session) -> AWResult<HttpResponse> {
     session.renew();
-    let mut rng = rand::thread_rng();
-    let id: u32 = rng.gen();
+    let id: RequestId = RequestId::new();
     session.insert(REQUEST_ID_COOKIE_KEY, id)?;
     // session.set(REQUEST_ID_COOKIE_KEY, id)?;
     Ok(HttpResponse::Ok().finish())
@@ -46,8 +43,9 @@ async fn create_upload(
     let id = request_cookie(&session)?;
     debug!("request-id: {}", id);
 
-    while let Ok(Some(mut field)) = payload.try_next().await {
-        let _content_type = validate_mime_type(field.content_type())?;
+    while let Some(mut field) = payload.try_next().await? {
+        let content_type = validate_mime_type(field.content_type())?;
+        trace!("received image type: {:?}", content_type);
 
         let data = read_byte_chunks(&mut field).await?;
         let resp = redis

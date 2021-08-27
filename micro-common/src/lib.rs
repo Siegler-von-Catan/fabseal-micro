@@ -1,46 +1,7 @@
-use std::{
-    array::TryFromSliceError,
-    convert::{TryFrom, TryInto},
-    fmt,
-};
-
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug)]
-pub struct RequestId(u32);
-
-impl RequestId {
-    pub fn create(id: u32) -> RequestId {
-        RequestId(id)
-    }
-
-    pub fn as_bytes(&self) -> [u8; 4] {
-        self.0.to_le_bytes()
-    }
-
-    pub fn from_bytes(v: &[u8]) -> Result<RequestId, TryFromSliceError> {
-        RequestId::try_from(v)
-    }
-}
-
-impl TryFrom<&[u8]> for RequestId {
-    type Error = TryFromSliceError;
-    fn try_from(v: &[u8]) -> Result<RequestId, Self::Error> {
-        debug_assert_eq!(v.len(), 4);
-        if v.len() != 4 {
-            // Err(())
-        }
-        let (int_bytes, _) = v.split_at(std::mem::size_of::<u32>());
-        let ci = int_bytes.try_into();
-        Ok(RequestId(u32::from_le_bytes(ci?)))
-    }
-}
-
-impl fmt::Display for RequestId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "rid[{:08X}]", self.0)
-    }
-}
+pub mod request_id;
+pub use request_id::RequestId;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ImageType {
