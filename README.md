@@ -18,11 +18,28 @@
 Steps:
 
 - Start `fabseal-micro`
-- Start `fabseal-worker-blender`, setting DMSTL_DIR to the directory containing [displacementMapToStl](https://github.com/Siegler-von-Catan/displacementMapToStl)
+- Start `fabseal-worker-blender`
 
 ## Configuration
 
-`fabseal-micro` can be configured using settings in `config/default.toml`.
+`fabseal-micro` and `fabseal-worker`
+can be configured using settings in `config/default.toml`.
+An example configuration file is included:
+```toml
+debug = true
+http_endpoint = "127.0.0.1:8080"
+# domain = "localhost"
+dmstl_directory = "path/to/displacementMapToStl"
+
+[redis]
+address = "127.0.0.1:6379"
+```
+
+* `debug`: Set to `true` for local development (disables some Cookie security options)
+* `http_endpoint`: Set the HTTP endpoint for `fabseal-micro`
+* `domain`: Cookie domain name for `fabseal-micro`
+* `dmstl_directory`: Path to the directory containing [displacementMapToStl](https://github.com/Siegler-von-Catan/displacementMapToStl)
+* `redis.address`: Address of Redis server (default should work for local development)
 
 ## Example
 
