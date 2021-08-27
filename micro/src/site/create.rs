@@ -11,7 +11,7 @@ use log::{debug, error, info, trace};
 use fabseal_micro_common::*;
 use redis_async::resp_array;
 
-use crate::site::{types::*, util::*};
+use crate::{settings::Settings, site::{types::*, util::*}};
 
 #[get("/public/result")]
 async fn fetch_model(info: web::Query<ResultRequestInfo>) -> AWResult<HttpResponse> {
@@ -36,6 +36,7 @@ async fn create_new(session: Session) -> AWResult<HttpResponse> {
 async fn create_upload(
     session: Session,
     redis: web::Data<Addr<RedisActor>>,
+    settings: web::Data<Settings>,
     mut payload: mp::Multipart,
 ) -> AWResult<HttpResponse> {
     info!("create_upload");
@@ -52,7 +53,7 @@ async fn create_upload(
             .send(Command(resp_array![
                 "SETEX",
                 image_key(id),
-                IMAGE_EXPIRATION_SECONDS.to_string(),
+                settings.limits.image_ttl.to_string(),
                 data
             ]))
             .await
@@ -69,6 +70,7 @@ async fn create_upload(
 async fn create_start(
     session: Session,
     redis: web::Data<Addr<RedisActor>>,
+    settings: web::Data<Settings>,
 ) -> AWResult<HttpResponse> {
     info!("create_start");
 
@@ -81,7 +83,7 @@ async fn create_start(
             FABSEAL_SUBMISSION_QUEUE,
             "MAXLEN",
             "~",
-            FABSEAL_SUBMISSION_QUEUE_LIMIT.to_string(),
+            settings.limits.queue_limit.to_string(),
             "*",
             "request_id",
             &id.as_bytes()[..]

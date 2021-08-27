@@ -1,8 +1,17 @@
 debug = true
-http_endpoint = "127.0.0.1:8080"
-# domain = "localhost"
-dmstl_directory = "foo/bar"
+dmstl_directory = "path/to/displacementMapToStl"
+
+[http]
+endpoint = "127.0.0.1:8080"
+cookie_domain = "localhost"
 
 [redis]
 address = "127.0.0.1:6379"
 # db_id = 0
+# password = "foobar"
+
+[limits]
+queue_limit = 32
+image_ttl = 600
+result_ttl = 600
+session_ttl = 1200

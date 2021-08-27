@@ -1,43 +1,37 @@
 use config::{Config, ConfigError, Environment, File};
 
+use fabseal_micro_common::{settings::{HttpSettings, Limits, RedisSettings}};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct RedisSettings {
-    pub address: String,
-    pub db_id: Option<i64>,
-    pub password: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
+#[serde(default)]
 pub struct Settings {
     pub debug: bool,
-    pub http_endpoint: String,
-    pub domain: Option<String>,
+    pub http: HttpSettings,
     pub redis: RedisSettings,
+    pub limits: Limits,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            debug: false,
+            http: HttpSettings::default(),
+            redis: RedisSettings::default(),
+            limits: Limits::default(),
+        }
+    }
 }
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
         let mut s = Config::default();
 
-        // Start off by merging in the "default" configuration file
-        s.merge(File::with_name("config/default"))?;
+        // Include config.toml entries
+        s.merge(File::with_name("config"))?;
 
-        /*
-        // Add in the current environment file
-        // Default to 'development' env
-        // Note that this file is _optional_
-        let env = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
-        s.merge(File::with_name(&format!("config/{}", env)).required(false))?;
-
-        // Add in a local configuration file
-        // This file shouldn't be checked in to git
-        s.merge(File::with_name("config/local").required(false))?;
-         */
-
-        // Add in settings from the environment (with a prefix of APP)
-        // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
+        // Add in settings from the environment (with a prefix of FABSEAL)
+        // Eg.. `FABSEAL_DEBUG=1 ./target/app` would set the `debug` key
         s.merge(Environment::with_prefix("fabseal"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as

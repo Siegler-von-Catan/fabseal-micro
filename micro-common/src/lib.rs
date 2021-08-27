@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 pub mod request_id;
 pub use request_id::RequestId;
 
+pub mod settings;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ImageType {
     PNG,
@@ -31,11 +33,6 @@ pub struct RequestSettings {
     pub is_low_quality: bool,
 }
 
-pub const RESULT_EXPIRATION_SECONDS: usize = 10 * 60;
-pub const IMAGE_EXPIRATION_SECONDS: usize = 10 * 60;
-pub const SESSION_TTL_SECONDS: u32 = 30 * 60;
-
-pub const FABSEAL_SUBMISSION_QUEUE_LIMIT: usize = 50;
 
 pub const FABSEAL_SUBMISSION_QUEUE: &str = "fs_submission";
 pub const FABSEAL_SUBMISSION_CONSUMER_GROUP: &str = "fs_submission_group";

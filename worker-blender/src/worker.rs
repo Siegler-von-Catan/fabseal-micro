@@ -1,11 +1,8 @@
-use std::{
-    convert::TryFrom,
-    process::{Command, Stdio},
-};
+use std::{convert::{TryFrom, TryInto}, process::{Command, Stdio}};
 
 use log::{debug, error, info, trace, warn};
 
-use fabseal_micro_common::*;
+use fabseal_micro_common::{*};
 
 use rand::Rng;
 use redis::{
@@ -28,6 +25,7 @@ use crate::worker::util::Context;
 use crate::Settings;
 
 pub(crate) struct Worker {
+    settings: Settings,
     conn: redis::Connection,
     ctx: Context,
     should_exit: Arc<AtomicBool>,
@@ -37,7 +35,7 @@ pub(crate) struct Worker {
 
 impl Drop for Worker {
     fn drop(&mut self) {
-        let res1: Result<Value, redis::RedisError> = self.conn.xgroup_delconsumer(
+        let res1: redis::RedisResult<Value> = self.conn.xgroup_delconsumer(
             FABSEAL_SUBMISSION_QUEUE,
             FABSEAL_SUBMISSION_CONSUMER_GROUP,
             &self.consumer_name,
@@ -65,7 +63,7 @@ impl Worker {
 
         let redis_addr = format!("redis://{}/", settings.redis.address);
 
-        Self::create_from(ctx, &redis_addr)
+        Self::create_from(settings, ctx, &redis_addr)
     }
 
     fn setup_stream(redis_conn: &mut redis::Connection) -> redis::RedisResult<()> {
@@ -121,7 +119,7 @@ impl Worker {
         Ok(should_exit)
     }
 
-    fn create_from(ctx: Context, redis_addr: &str) -> Result<Worker> {
+    fn create_from(settings: Settings, ctx: Context, redis_addr: &str) -> Result<Worker> {
         let client = redis::Client::open(redis_addr)?;
         let conn = {
             let mut conn = client.get_connection()?;
@@ -140,6 +138,7 @@ impl Worker {
             .group(FABSEAL_SUBMISSION_CONSUMER_GROUP, &consumer_name);
 
         Ok(Worker {
+            settings,
             conn,
             ctx,
             should_exit,
@@ -230,7 +229,7 @@ impl Worker {
     fn try_handle(&mut self, payload: &[u8], request_id: RequestId) -> Result<()> {
         let fctx = CommandFileContext::create(payload)?;
 
-        let mut comm = Command::new("/usr/bin/blender");
+        let mut comm = Command::new("blender");
 
         comm.stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -259,7 +258,7 @@ impl Worker {
         trace!("setting key={}", key);
         let _: () = self
             .conn
-            .set_ex(key, result_data, RESULT_EXPIRATION_SECONDS)?;
+            .set_ex(key, result_data, self.settings.limits.result_ttl.try_into().unwrap())?;
 
         Ok(())
     }
