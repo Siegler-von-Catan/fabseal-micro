@@ -23,3 +23,8 @@ Steps:
 ## Configuration
 
 `fabseal-micro` can be configured using settings in `config/default.toml`.
+
+## Example
+
+The script `demo.sh` contains an example of a typical invocation of the Create API (using [curl](https://curl.se/)).
+A typical curl output is included in `demo_output.txt`.
