@@ -39,3 +39,4 @@ time = "0.2"
 futures-util = "0.3"
 redis-async = { version = "0.8", default-features = false, features = ["tokio10"] }
 config = { version = "0.11", default-features = false, features = [ "toml" ] }
+opencv = "^0.54.0"

@@ -78,3 +78,37 @@ impl fmt::Display for RequestId {
         write!(f, "rid[{:08X}]", self.0)
     }
 }
+
+const REDIS_NAMESPACE: &str = "fsdata_v1";
+
+pub fn result_key(request_id: RequestId) -> String {
+    const REDIS_NAMESPACE_RESULT: &str = "result";
+    format!(
+        "{}:{}:{}",
+        REDIS_NAMESPACE, REDIS_NAMESPACE_RESULT, request_id
+    )
+}
+
+pub fn input_key(request_id: RequestId) -> String {
+    const REDIS_NAMESPACE_INPUT: &str = "input";
+    format!(
+        "{}:{}:{}",
+        REDIS_NAMESPACE, REDIS_NAMESPACE_INPUT, request_id
+    )
+}
+
+pub fn image_key(request_id: RequestId) -> String {
+    const REDIS_NAMESPACE_IMAGE: &str = "image";
+    format!(
+        "{}:{}:{}",
+        REDIS_NAMESPACE, REDIS_NAMESPACE_IMAGE, request_id
+    )
+}
+
+pub fn processed_image_key(request_id: RequestId) -> String {
+    const REDIS_NAMESPACE_PROCESSED_IMAGE: &str = "processed_image";
+    format!(
+        "{}:{}:{}",
+        REDIS_NAMESPACE, REDIS_NAMESPACE_PROCESSED_IMAGE, request_id
+    )
+}

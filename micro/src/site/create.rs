@@ -12,6 +12,7 @@ use fabseal_micro_common::*;
 use redis_async::resp_array;
 
 use crate::{
+    prepare_image::run,
     settings::Settings,
     site::{types::*, util::*},
 };
@@ -52,12 +53,34 @@ async fn create_upload(
         trace!("received image type: {:?}", content_type);
 
         let data = read_byte_chunks(&mut field).await?;
+
         let resp = redis
             .send(Command(resp_array![
                 "SETEX",
                 image_key(id),
                 settings.limits.image_ttl.to_string(),
-                data
+                data.as_slice()
+            ]))
+            .await
+            .map_err(redis_error("SETEX"))?
+            .map_err(redis_error("SETEX"))?;
+
+        debug_assert_eq!(resp, RespValue::SimpleString("OK".to_string()));
+
+        let processed = actix_web::rt::task::spawn_blocking(move || run(&data))
+            .await
+            .unwrap()
+            .map_err(|e| {
+                error!("error processing image: {}", e);
+                actix_web::error::ErrorInternalServerError("processing error")
+            })?;
+
+        let resp = redis
+            .send(Command(resp_array![
+                "SETEX",
+                processed_image_key(id),
+                settings.limits.image_ttl.to_string(),
+                processed.as_slice()
             ]))
             .await
             .map_err(redis_error("SETEX"))?
@@ -116,24 +139,23 @@ async fn create_result(
     info!("create_result query={:?}", info);
     // Ok(HttpResponse::Processing().finish())
 
-    match info.result_type {
-        ResultType::Heightmap => return Ok(HttpResponse::NotImplemented().finish()),
-        ResultType::Model => {}
-    }
+    let (key_function, response_content_type): (fn(RequestId) -> String, &str) =
+        match info.result_type {
+            ResultType::Heightmap => (processed_image_key, "image/jpeg"),
+            ResultType::Model => (result_key, "model/stl"),
+        };
 
     let id = request_cookie(&session)?;
 
-    let comm = Command(resp_array!["GET", result_key(id)]);
-    debug!("redis command: {:?}", comm);
     let resp = redis
-        .send(comm)
+        .send(Command(resp_array!["GET", key_function(id)]))
         .await
         .map_err(redis_error("GET"))?
         .map_err(redis_error("GET"))?;
 
     let response_data = convert_bytes_response(resp)?;
     Ok(HttpResponse::Ok()
-        .content_type("model/stl")
+        .content_type(response_content_type)
         .body(response_data))
 }
 

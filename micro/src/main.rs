@@ -19,6 +19,8 @@ mod settings;
 use settings::Settings;
 use time::Duration;
 
+mod prepare_image;
+
 const COOKIE_DURATION: Duration = Duration::hour();
 
 fn create_redis_session(settings: &Settings, key: &[u8]) -> RedisSession {
@@ -34,7 +36,7 @@ fn create_redis_session(settings: &Settings, key: &[u8]) -> RedisSession {
         s.cookie_secure(false)
     } else {
         match &settings.http.cookie_domain {
-            Some(d) => s.cookie_secure(true).cookie_domain(&d),
+            Some(d) => s.cookie_secure(true).cookie_domain(d),
             _ => s.cookie_secure(true),
         }
     }
@@ -45,13 +47,12 @@ fn build_cors(settings: &Settings) -> actix_cors::Cors {
         Cors::permissive()
     } else {
         let mut cors = Cors::default()
-            .allowed_origin("https://www.rust-lang.org")
             .allowed_methods(vec!["GET", "POST"])
             .allowed_headers(vec![http::header::CONTENT_TYPE, http::header::ACCEPT])
             .max_age(3600)
             .supports_credentials();
         for origin in &settings.http.cors_origins {
-            cors = cors.allowed_origin(&origin);
+            cors = cors.allowed_origin(origin);
         }
         cors
     }
