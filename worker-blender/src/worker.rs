@@ -70,11 +70,22 @@ impl Worker {
     }
 
     fn setup_stream(redis_conn: &mut redis::Connection) -> redis::RedisResult<()> {
-        let group_exists: bool = redis_conn
-            .xinfo_groups::<_, StreamInfoGroupsReply>(FABSEAL_SUBMISSION_QUEUE)?
-            .groups
-            .iter()
-            .any(|g| g.name == FABSEAL_SUBMISSION_CONSUMER_GROUP);
+        let group_exists: bool =
+            match redis_conn.xinfo_groups::<_, StreamInfoGroupsReply>(FABSEAL_SUBMISSION_QUEUE) {
+                Ok(reply) => reply
+                    .groups
+                    .iter()
+                    .any(|g| g.name == FABSEAL_SUBMISSION_CONSUMER_GROUP),
+                Err(e) => {
+                    warn!(
+                        "Error while fetching stream information (likely harmless): {}",
+                        e
+                    );
+
+                    // Assume the stream does not exist yet
+                    false
+                }
+            };
 
         if group_exists {
             return Ok(());
