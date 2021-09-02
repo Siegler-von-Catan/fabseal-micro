@@ -1,8 +1,11 @@
-use std::{convert::{TryFrom, TryInto}, process::{Command, Stdio}};
+use std::{
+    convert::{TryFrom, TryInto},
+    process::{Command, Stdio},
+};
 
 use log::{debug, error, info, trace, warn};
 
-use fabseal_micro_common::{*};
+use fabseal_micro_common::*;
 
 use rand::Rng;
 use redis::{
@@ -10,7 +13,7 @@ use redis::{
     Commands, Value,
 };
 
-use anyhow::Result;
+use color_eyre::eyre::Result;
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -20,14 +23,14 @@ use std::sync::{
 mod file_context;
 use crate::worker::file_context::CommandFileContext;
 mod util;
-use crate::worker::util::Context;
+use crate::worker::util::WorkerContext;
 
 use crate::Settings;
 
 pub(crate) struct Worker {
     settings: Settings,
     conn: redis::Connection,
-    ctx: Context,
+    ctx: WorkerContext,
     should_exit: Arc<AtomicBool>,
     consumer_name: String,
     read_options: StreamReadOptions,
@@ -59,7 +62,7 @@ impl Drop for Worker {
 
 impl Worker {
     pub(crate) fn create(settings: Settings) -> Result<Worker> {
-        let ctx = Context::from_dmstl_dir(settings.dmstl_directory.as_str());
+        let ctx = WorkerContext::from_dmstl_dir(&settings.dmstl_directory)?;
 
         let redis_addr = format!("redis://{}/", settings.redis.address);
 
@@ -119,7 +122,7 @@ impl Worker {
         Ok(should_exit)
     }
 
-    fn create_from(settings: Settings, ctx: Context, redis_addr: &str) -> Result<Worker> {
+    fn create_from(settings: Settings, ctx: WorkerContext, redis_addr: &str) -> Result<Worker> {
         let client = redis::Client::open(redis_addr)?;
         let conn = {
             let mut conn = client.get_connection()?;
@@ -249,16 +252,18 @@ impl Worker {
         if !status.success() {
             trace!("explicitly closing temporary files");
             drop(fctx);
-            anyhow::bail!("Blender command failed");
+            color_eyre::eyre::bail!("Blender command failed");
         }
 
         let result_data = fctx.finish()?;
 
         let key = result_key(request_id);
         trace!("setting key={}", key);
-        let _: () = self
-            .conn
-            .set_ex(key, result_data, self.settings.limits.result_ttl.try_into().unwrap())?;
+        let _: () = self.conn.set_ex(
+            key,
+            result_data,
+            self.settings.limits.result_ttl.try_into().unwrap(),
+        )?;
 
         Ok(())
     }

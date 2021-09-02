@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use config::{Config, ConfigError, Environment, File};
 
 use fabseal_micro_common::settings::{Limits, RedisSettings};
@@ -5,7 +7,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
-    pub dmstl_directory: String,
+    pub dmstl_directory: PathBuf,
 
     #[serde(default)]
     pub redis: RedisSettings,

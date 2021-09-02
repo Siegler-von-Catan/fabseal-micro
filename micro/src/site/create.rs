@@ -11,7 +11,10 @@ use log::{debug, error, info, trace};
 use fabseal_micro_common::*;
 use redis_async::resp_array;
 
-use crate::{settings::Settings, site::{types::*, util::*}};
+use crate::{
+    settings::Settings,
+    site::{types::*, util::*},
+};
 
 #[get("/public/result")]
 async fn fetch_model(info: web::Query<ResultRequestInfo>) -> AWResult<HttpResponse> {
