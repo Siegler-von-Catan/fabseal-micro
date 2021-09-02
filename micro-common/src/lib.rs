@@ -33,7 +33,6 @@ pub struct RequestSettings {
     pub is_low_quality: bool,
 }
 
-
 pub const FABSEAL_SUBMISSION_QUEUE: &str = "fs_submission";
 pub const FABSEAL_SUBMISSION_CONSUMER_GROUP: &str = "fs_submission_group";
 

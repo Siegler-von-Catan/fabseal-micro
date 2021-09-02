@@ -33,6 +33,7 @@ dmstl_directory = "path/to/displacementMapToStl"
 [http]
 endpoint = "127.0.0.1:8080"
 cookie_domain = "localhost"
+cors_origins = [ "http://127.0.0.1:8080" ]
 
 [redis]
 address = "127.0.0.1:6379"
@@ -50,6 +51,7 @@ session_ttl = 1200
 * `dmstl_directory`: Path to the directory containing [displacementMapToStl](https://github.com/Siegler-von-Catan/displacementMapToStl)
 * `http.endpoint`: Set the HTTP endpoint for `fabseal-micro`
 * `http.cookie_domain`: Cookie domain name for `fabseal-micro`
+* `http.cors_origins`: Allowed origins for CORS
 * `redis.address`: Address of Redis server (default should work for local development)
 * `redis.password`: Password for Redis authentication (currently unimplemented!)
 * `limits.queue_limit`: Work queue task limit

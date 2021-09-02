@@ -49,6 +49,7 @@ impl Default for Limits {
 pub struct HttpSettings {
     pub endpoint: String,
     pub cookie_domain: Option<String>,
+    pub cors_origins: Vec<String>,
 }
 
 impl Default for HttpSettings {
@@ -56,6 +57,7 @@ impl Default for HttpSettings {
         Self {
             endpoint: "127.0.0.1:8080".to_string(),
             cookie_domain: None,
+            cors_origins: vec![],
         }
     }
 }

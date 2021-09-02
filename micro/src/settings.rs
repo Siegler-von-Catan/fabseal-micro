@@ -1,6 +1,6 @@
 use config::{Config, ConfigError, Environment, File};
 
-use fabseal_micro_common::{settings::{HttpSettings, Limits, RedisSettings}};
+use fabseal_micro_common::settings::{HttpSettings, Limits, RedisSettings};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]

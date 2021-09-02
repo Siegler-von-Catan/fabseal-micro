@@ -1,5 +1,7 @@
 use actix_redis::RedisSession;
-use actix_web::{cookie::SameSite, web::Data};
+use actix_web::{cookie::SameSite, http, web::Data};
+
+use actix_cors::Cors;
 
 use rand::Rng;
 
@@ -19,7 +21,7 @@ use time::Duration;
 
 const COOKIE_DURATION: Duration = Duration::hour();
 
-fn create_redis_session(settings: Settings, key: &[u8]) -> RedisSession {
+fn create_redis_session(settings: &Settings, key: &[u8]) -> RedisSession {
     let s = RedisSession::new(settings.redis.address.clone(), key)
         .ttl(settings.limits.session_ttl)
         .cookie_name("fabseal_session")
@@ -31,10 +33,27 @@ fn create_redis_session(settings: Settings, key: &[u8]) -> RedisSession {
     if settings.debug {
         s.cookie_secure(false)
     } else {
-        match settings.http.cookie_domain {
+        match &settings.http.cookie_domain {
             Some(d) => s.cookie_secure(true).cookie_domain(&d),
             _ => s.cookie_secure(true),
         }
+    }
+}
+
+fn build_cors(settings: &Settings) -> actix_cors::Cors {
+    if settings.debug {
+        Cors::permissive()
+    } else {
+        let mut cors = Cors::default()
+            .allowed_origin("https://www.rust-lang.org")
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![http::header::CONTENT_TYPE, http::header::ACCEPT])
+            .max_age(3600)
+            .supports_credentials();
+        for origin in &settings.http.cors_origins {
+            cors = cors.allowed_origin(&origin);
+        }
+        cors
     }
 }
 
@@ -51,13 +70,15 @@ async fn main() -> std::io::Result<()> {
     let ep = settings.http.endpoint.clone();
     HttpServer::new(move || {
         let redis = RedisActor::start(settings.redis.address.as_str());
+        let cors = build_cors(&settings);
 
         App::new()
             .app_data(Data::new(redis))
             .app_data(Data::new(settings.clone()))
             // .wrap(actix_web::middleware::Compress::default())
+            .wrap(cors)
             .wrap(Logger::default())
-            .wrap(create_redis_session(settings.clone(), &key))
+            .wrap(create_redis_session(&settings, &key))
             .service(web::scope("/api/v1").configure(create_service))
     })
     .bind(ep)?

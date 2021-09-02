@@ -4,6 +4,7 @@ dmstl_directory = "path/to/displacementMapToStl"
 [http]
 endpoint = "127.0.0.1:8080"
 cookie_domain = "localhost"
+cors_origins = [ "http://127.0.0.1:8080" ]
 
 [redis]
 address = "127.0.0.1:6379"
