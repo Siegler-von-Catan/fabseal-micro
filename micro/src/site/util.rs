@@ -13,9 +13,16 @@ use fabseal_micro_common::{ImageType, RequestId};
 pub(crate) const REQUEST_ID_COOKIE_KEY: &str = "request-id";
 
 pub(crate) fn request_cookie(session: &Session) -> AWResult<RequestId> {
-    session
-        .get::<RequestId>(REQUEST_ID_COOKIE_KEY)?
-        .ok_or_else(|| actix_web::error::ErrorForbidden("Session cookie is required for upload"))
+    match session.get::<RequestId>(REQUEST_ID_COOKIE_KEY)? {
+        None => {
+            let rid: RequestId = RequestId::new();
+            session.insert(REQUEST_ID_COOKIE_KEY, rid)?;
+            Ok(rid)
+        },
+        Some(rid) => {
+            Ok(rid)
+        },
+    }
 }
 
 const UPLOAD_LIMIT: usize = 8 * 1024 * 1024;
