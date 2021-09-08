@@ -220,7 +220,10 @@ impl Worker {
                 panic!("panic");
             }
         };
-        let image_data: Vec<u8> = match self.conn.get(image_key(request_id)).unwrap() {
+
+        debug!("received message with request_id={}", request_id);
+
+        let image_data: Vec<u8> = match self.conn.get(processed_image_key(request_id)).unwrap() {
             Value::Data(v) => v,
             Value::Nil => {
                 warn!("Tried reading image for request {}, but it is gone (probably expired)", request_id);
