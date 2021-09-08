@@ -6,7 +6,7 @@ use futures_util::stream::StreamExt;
 
 use redis_async::resp::RespValue;
 
-use log::{error, info};
+use log::{debug, error, info, warn};
 
 use fabseal_micro_common::{ImageType, RequestId};
 
@@ -29,7 +29,11 @@ pub(crate) async fn read_byte_chunks(field: &mut mp::Field) -> AWResult<Vec<u8>>
     let mut data: Vec<u8> = Vec::new();
     while let Some(chunk) = field.next().await {
         let chunk = chunk?;
+
+        debug!("chunk len={}", chunk.len());
+
         if data.len() + chunk.len() > UPLOAD_LIMIT {
+            warn!("Rejected upload: data len={}, chunk len={}, limit={}", data.len(), chunk.len(), UPLOAD_LIMIT);
             return Err(actix_web::error::ErrorPayloadTooLarge(
                 "Upload limit exceeded",
             ));
