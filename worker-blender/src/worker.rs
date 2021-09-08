@@ -202,7 +202,7 @@ impl Worker {
         debug!("resp: {:?}", resp);
 
         debug_assert!(resp == redis::Value::Int(1));
-        if (resp != redis::Value::Int(1)) {
+        if resp != redis::Value::Int(1) {
             error!("error while sending XACK, response: {:?}", resp);
         }
     }

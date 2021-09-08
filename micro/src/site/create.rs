@@ -2,7 +2,11 @@ use actix::Addr;
 use actix_multipart as mp;
 use actix_redis::{Command, RedisActor, RespValue};
 use actix_session::Session;
-use actix_web::{get, post, web, HttpResponse, Result as AWResult};
+use actix_web::{
+    get,
+    http::header::{ContentDisposition, DispositionParam, DispositionType},
+    post, web, HttpResponse, Result as AWResult,
+};
 
 use futures_util::TryStreamExt;
 
@@ -139,13 +143,25 @@ async fn create_result(
     info!("create_result query={:?}", info);
     // Ok(HttpResponse::Processing().finish())
 
-    let (key_function, response_content_type): (fn(RequestId) -> String, &str) =
-        match info.result_type {
-            ResultType::Heightmap => (processed_image_key, "image/jpeg"),
-            ResultType::Model => (result_key, "model/stl"),
-        };
-
     let id = request_cookie(&session)?;
+
+    let mut response_builder = HttpResponse::Ok();
+
+    let key_function: fn(RequestId) -> String = match info.result_type {
+        ResultType::Heightmap => {
+            response_builder.content_type("image/jpeg");
+            processed_image_key
+        }
+        ResultType::Model => {
+            let cd = ContentDisposition {
+                disposition: DispositionType::Attachment,
+                parameters: vec![DispositionParam::Filename(format!("model_{}.stl", id))],
+            };
+            response_builder.append_header(cd);
+            response_builder.content_type("model/stl");
+            result_key
+        }
+    };
 
     let resp = redis
         .send(Command(resp_array!["GET", key_function(id)]))
@@ -154,9 +170,8 @@ async fn create_result(
         .map_err(redis_error("GET"))?;
 
     let response_data = convert_bytes_response(resp)?;
-    Ok(HttpResponse::Ok()
-        .content_type(response_content_type)
-        .body(response_data))
+
+    Ok(response_builder.body(response_data))
 }
 
 #[post("/finish")]

@@ -75,7 +75,7 @@ impl TryFrom<&[u8]> for RequestId {
 
 impl fmt::Display for RequestId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "rid[{:08X}]", self.0)
+        write!(f, "{:08X}", self.0)
     }
 }
 

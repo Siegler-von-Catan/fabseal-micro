@@ -18,10 +18,8 @@ pub(crate) fn request_cookie(session: &Session) -> AWResult<RequestId> {
             let rid: RequestId = RequestId::new();
             session.insert(REQUEST_ID_COOKIE_KEY, rid)?;
             Ok(rid)
-        },
-        Some(rid) => {
-            Ok(rid)
-        },
+        }
+        Some(rid) => Ok(rid),
     }
 }
 
