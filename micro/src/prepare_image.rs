@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 
 use opencv::{
-    core::{Mat, Point2f, Rect, Rect_, Scalar, Scalar_, Size, Vector, CV_8UC1},
+    core::{Mat, Point2f, Rect, Rect_, Scalar, Scalar_, Size, Vector, CV_8UC1, NORM_MINMAX},
     prelude::*,
 };
 
@@ -62,7 +62,24 @@ fn process(image: Mat, topleft: Point2f, downright: Point2f) -> opencv::Result<M
         fg
     };
 
-    apply_rect_bounds(fg, crop_rect(bounding_rect, sz))
+    let cropped = apply_rect_bounds(fg, crop_rect(bounding_rect, sz))?;
+
+    let normalized_dst = {
+        let mut normalized_dst = Mat::default();
+        let no_array = opencv::core::no_array()?;
+        opencv::core::normalize(
+            &cropped,
+            &mut normalized_dst,
+            0.0,
+            255.0,
+            NORM_MINMAX,
+            -1,
+            &no_array,
+        )?;
+        normalized_dst
+    };
+
+    Ok(normalized_dst)
 }
 
 fn crop_rect(bounding_rect: Rect, image_size: Size) -> Rect {
