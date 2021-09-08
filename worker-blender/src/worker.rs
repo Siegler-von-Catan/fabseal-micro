@@ -275,6 +275,7 @@ impl Worker {
         }
 
         let result_data = fctx.finish()?;
+        debug!("result sz={}", result_data.len());
 
         let key = result_key(request_id);
         trace!("setting key={}", key);
