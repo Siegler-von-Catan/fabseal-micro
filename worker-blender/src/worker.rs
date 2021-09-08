@@ -188,6 +188,26 @@ impl Worker {
         info!("received signal, shutting down");
     }
 
+    fn send_ack(&mut self, msg: StreamId) {
+        debug!("ack-ing message");
+
+        let resp: Value = self
+            .conn
+            .xack(
+                FABSEAL_SUBMISSION_QUEUE,
+                FABSEAL_SUBMISSION_CONSUMER_GROUP,
+                &[msg.id],
+            )
+            .unwrap();
+        debug!("resp: {:?}", resp);
+
+        debug_assert!(resp == redis::Value::Int(1));
+        if (resp != redis::Value::Int(1)) {
+            error!("error while sending XACK, response: {:?}", resp);
+        }
+    }
+
+
     fn handle_stream_msg(&mut self, msg: StreamId) {
         trace!("msg={:?}", msg);
 
@@ -202,40 +222,28 @@ impl Worker {
         };
         let image_data: Vec<u8> = match self.conn.get(image_key(request_id)).unwrap() {
             Value::Data(v) => v,
+            Value::Nil => {
+                warn!("Tried reading image for request {}, but it is gone (probably expired)", request_id);
+
+                self.send_ack(msg);
+                return;
+            },
             v => {
                 error!("unexpected Redis response value: {:?}", v);
                 panic!("panic");
-            }
+            },
         };
 
         match self.try_handle(&image_data, request_id) {
             Ok(_) => {
                 debug!("ack-ing message");
 
-                let res2: Value = self
-                    .conn
-                    .xack(
-                        FABSEAL_SUBMISSION_QUEUE,
-                        FABSEAL_SUBMISSION_CONSUMER_GROUP,
-                        &[msg.id],
-                    )
-                    .unwrap();
-                debug!("resp: {:?}", res2);
-
-                assert!(res2 == redis::Value::Int(1));
+                self.send_ack(msg);
             }
             Err(e) => {
                 error!("error while processing: {}", e);
 
-                let res2: Value = self
-                    .conn
-                    .xack(
-                        FABSEAL_SUBMISSION_QUEUE,
-                        FABSEAL_SUBMISSION_CONSUMER_GROUP,
-                        &[msg.id],
-                    )
-                    .unwrap();
-                assert!(res2 == redis::Value::Okay);
+                self.send_ack(msg);
             }
         };
     }
