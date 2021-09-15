@@ -31,14 +31,6 @@ async fn fetch_model(info: web::Query<ResultRequestInfo>) -> AWResult<HttpRespon
     }
 }
 
-#[post("/new")]
-async fn create_new(session: Session) -> AWResult<HttpResponse> {
-    session.renew();
-    let id: RequestId = RequestId::new();
-    session.insert(REQUEST_ID_COOKIE_KEY, id)?;
-    // session.set(REQUEST_ID_COOKIE_KEY, id)?;
-    Ok(HttpResponse::Ok().finish())
-}
 
 #[post("/upload")]
 async fn create_upload(
@@ -185,7 +177,6 @@ pub(crate) fn create_service(cfg: &mut web::ServiceConfig) {
     cfg.service(web::scope("/userupload").service(fetch_model));
     cfg.service(
         web::scope("/create")
-            .service(create_new)
             .service(create_upload)
             .service(create_start)
             .service(create_result)
