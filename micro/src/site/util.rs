@@ -14,7 +14,11 @@ pub(crate) const REQUEST_ID_COOKIE_KEY: &str = "request-id";
 
 pub(crate) fn new_request_cookie(session: &Session) -> AWResult<RequestId> {
     let rid: RequestId = RequestId::new();
+    let _old_key = session.remove(REQUEST_ID_COOKIE_KEY);
     session.insert(REQUEST_ID_COOKIE_KEY, rid)?;
+
+    debug!("old_key={:?} rid={}", _old_key, rid);
+
     Ok(rid)
 }
 
