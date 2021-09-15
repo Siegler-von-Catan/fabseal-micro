@@ -41,7 +41,9 @@ async fn create_upload(
 ) -> AWResult<HttpResponse> {
     info!("create_upload");
 
-    let id = request_cookie(&session)?;
+    session.clear();
+
+    let id = new_request_cookie(&session)?;
     debug!("request-id: {}", id);
 
     while let Some(mut field) = payload.try_next().await? {

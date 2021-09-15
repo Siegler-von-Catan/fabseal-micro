@@ -12,12 +12,16 @@ use fabseal_micro_common::{ImageType, RequestId};
 
 pub(crate) const REQUEST_ID_COOKIE_KEY: &str = "request-id";
 
+pub(crate) fn new_request_cookie(session: &Session) -> AWResult<RequestId> {
+    let rid: RequestId = RequestId::new();
+    session.insert(REQUEST_ID_COOKIE_KEY, rid)?;
+    Ok(rid)
+}
+
 pub(crate) fn request_cookie(session: &Session) -> AWResult<RequestId> {
     match session.get::<RequestId>(REQUEST_ID_COOKIE_KEY)? {
         None => {
-            let rid: RequestId = RequestId::new();
-            session.insert(REQUEST_ID_COOKIE_KEY, rid)?;
-            Ok(rid)
+            new_request_cookie(session)
         }
         Some(rid) => Ok(rid),
     }
